@@ -1,0 +1,5 @@
+# Ignorar arquivos objeto e executáveis
+*.o
+*.out
+*.exe
+ems
