@@ -4,31 +4,23 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <string.h>
+#include <fcntl.h>
 
 #include "constants.h"
 #include "operations.h"
 #include "parser.h"
 
+typedef struct dirent dirent;
+
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
-  /*DIR *dir = opendir(argv[1]);
-  struct dirent *dp;
-
-  if(dir != NULL) {
-    while((dp = readdir(dir)) != NULL) {
-      if(strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0 )
-        continue;
-      char *extension = strstr(dp->d_name, ".jobs");
-      if(extension != NULL && extension == dp->d_name + strlen(dp->d_name) - 5) {
-
-      }
-    }
-    closedir(dir);
-  } else {
-    fprintf(stderr, "Failed to opening directory\n");
-    return 1;
-  }*/
-
+  unsigned int jobsFlag = 0;
+  int fd = STDIN_FILENO;
+  char extension[6];
+  strcpy(extension, ".jobs");
+  DIR* dir;
+  dirent* dp;
+ 
   if (argc > 1) {
     char *endptr;
     unsigned long int delay = strtoul(argv[1], &endptr, 10);
@@ -37,6 +29,7 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "Invalid delay value or value too large\n");
       return 1;
     }
+    if (argc > 2) jobsFlag = 1;
 
     state_access_delay_ms = (unsigned int)delay;
   }
@@ -50,13 +43,45 @@ int main(int argc, char *argv[]) {
     unsigned int event_id, delay;
     size_t num_rows, num_columns, num_coords;
     size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
+    char filename[256];
+    
+    if(jobsFlag == 1){
+      dir = opendir(argv[2]);
+      if (dir == NULL) {
+        fprintf(stderr, "Failed to open directory %s.\n", argv[2]);
+        return 1;
+      }
+      dp = readdir(dir);
+      if (dp == NULL) {
+        fprintf(stderr, "Failed to read directory %s.\n", argv[2]);
+        return 1;
+      }
+      while(strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0 || strstr(dp->d_name, extension) == NULL) {
+        dp = readdir(dir);
+        if (dp == NULL) {
+          fprintf(stderr, "Failed to read directory %s.\n", argv[2]);
+          return 1;
+        }
+      }
+      strcpy(filename, argv[2]);
+      strcat(filename, "/");
+      strcat(filename, dp->d_name);
+      fd = open(filename, O_RDONLY);
+      if (fd == -1) {
+        fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
+        return 1;
+      }
+      jobsFlag = 2;
+    }
 
-    printf("> ");
-    fflush(stdout);
+    if (jobsFlag == 0){
+      printf("> ");
+      fflush(stdout);
+    }
 
-    switch (get_next(STDIN_FILENO)) {
+    switch (get_next(fd)) {
       case CMD_CREATE:
-        if (parse_create(STDIN_FILENO, &event_id, &num_rows, &num_columns) != 0) {
+        if (parse_create(fd, &event_id, &num_rows, &num_columns) != 0) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
@@ -65,10 +90,10 @@ int main(int argc, char *argv[]) {
           fprintf(stderr, "Failed to create event\n");
         }
 
-        break;
+        continue;
 
       case CMD_RESERVE:
-        num_coords = parse_reserve(STDIN_FILENO, MAX_RESERVATION_SIZE, &event_id, xs, ys);
+        num_coords = parse_reserve(fd, MAX_RESERVATION_SIZE, &event_id, xs, ys);
 
         if (num_coords == 0) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
@@ -79,10 +104,10 @@ int main(int argc, char *argv[]) {
           fprintf(stderr, "Failed to reserve seats\n");
         }
 
-        break;
+        continue;
 
       case CMD_SHOW:
-        if (parse_show(STDIN_FILENO, &event_id) != 0) {
+        if (parse_show(fd, &event_id) != 0) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
@@ -91,17 +116,17 @@ int main(int argc, char *argv[]) {
           fprintf(stderr, "Failed to show event\n");
         }
 
-        break;
+        continue;
 
       case CMD_LIST_EVENTS:
         if (ems_list_events()) {
           fprintf(stderr, "Failed to list events\n");
         }
 
-        break;
+        continue;
 
       case CMD_WAIT:
-        if (parse_wait(STDIN_FILENO, &delay, NULL) == -1) {  // thread_id is not implemented
+        if (parse_wait(fd, &delay, NULL) == -1) {  // thread_id is not implemented
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
@@ -111,11 +136,11 @@ int main(int argc, char *argv[]) {
           ems_wait(delay);
         }
 
-        break;
+        continue;
 
       case CMD_INVALID:
         fprintf(stderr, "Invalid command. See HELP for usage\n");
-        break;
+        continue;
 
       case CMD_HELP:
         printf(
@@ -128,15 +153,36 @@ int main(int argc, char *argv[]) {
             "  BARRIER\n"                      // Not implemented
             "  HELP\n");
 
-        break;
+        continue;
 
       case CMD_BARRIER:  // Not implemented
       case CMD_EMPTY:
-        break;
+        continue;
 
       case EOC:
-        ems_terminate();
-        return 0;
+      printf("\n");
+        break;
     }
+    close(fd);
+    if (jobsFlag == 2) {
+      do {
+        dp = readdir(dir);
+        if (dp == NULL) break;
+      } while(strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0 || strstr(dp->d_name, extension) == NULL);
+      if (dp == NULL) {
+        closedir(dir);
+        break;
+      }
+      strcpy(filename, argv[2]);
+      strcat(filename, "/");
+      strcat(filename, dp->d_name);
+      fd = open(filename, O_RDONLY); 
+      if (fd == -1) {
+        fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
+        return 1;
+      }
+    }  
   }
+  ems_terminate();
+  return 0;
 }
