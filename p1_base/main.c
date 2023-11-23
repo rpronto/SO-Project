@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <string.h>
 
 #include "constants.h"
 #include "operations.h"
@@ -9,6 +11,23 @@
 
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
+  /*DIR *dir = opendir(argv[1]);
+  struct dirent *dp;
+
+  if(dir != NULL) {
+    while((dp = readdir(dir)) != NULL) {
+      if(strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0 )
+        continue;
+      char *extension = strstr(dp->d_name, ".jobs");
+      if(extension != NULL && extension == dp->d_name + strlen(dp->d_name) - 5) {
+
+      }
+    }
+    closedir(dir);
+  } else {
+    fprintf(stderr, "Failed to opening directory\n");
+    return 1;
+  }*/
 
   if (argc > 1) {
     char *endptr;
