@@ -71,6 +71,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
         return 1;
       }
+      printf("%s\n", dp->d_name);
       jobsFlag = 2;
     }
 
@@ -181,6 +182,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
         return 1;
       }
+      printf("%s\n", dp->d_name);
     }  
   }
   ems_terminate();
