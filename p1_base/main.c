@@ -113,14 +113,14 @@ int main(int argc, char *argv[]) {
           continue;
         }
 
-        if (ems_show(event_id)) {
+        if (ems_show(event_id, filename)) {
           fprintf(stderr, "Failed to show event\n");
         }
 
         continue;
 
       case CMD_LIST_EVENTS:
-        if (ems_list_events()) {
+        if (ems_list_events(filename)) {
           fprintf(stderr, "Failed to list events\n");
         }
 

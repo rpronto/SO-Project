@@ -3,6 +3,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <string.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include "eventlist.h"
 
@@ -158,7 +160,8 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   return 0;
 }
 
-int ems_show(unsigned int event_id) {
+int ems_show(unsigned int event_id, char *filename) {
+  char new_filename[256];
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
@@ -171,34 +174,64 @@ int ems_show(unsigned int event_id) {
     return 1;
   }
 
+  if(filename != NULL) {
+    strcpy(new_filename, filename);
+    char *extension_ptr = strstr(new_filename, ".jobs");
+    if(extension_ptr != NULL) {
+      strcpy(extension_ptr, ".out");
+    }
+  }
+
+  int fd = open(new_filename, O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR);
+  if(fd == -1) {
+      fprintf(stderr, "Failed to open file %s.\n", new_filename);
+      return 1;
+  }
+
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
       unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
       char buffer[100];
       ssize_t len = snprintf(buffer, sizeof(buffer), "%u", *seat);
-      write(STDOUT_FILENO, buffer, (size_t)len);
+      write(fd, buffer, (size_t)len);
 
       if (j < event->cols) {
-        write(STDOUT_FILENO, " ", 1);
+        write(fd, " ", 1);
       }
     }
 
-    write(STDOUT_FILENO, "\n", 1);
+    write(fd, "\n", 1);
   }
-
+  close(fd);
   return 0;
 }
 
-int ems_list_events() {
+int ems_list_events(char *filename) {
+  char new_filename[256];
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
   }
 
+  if(filename != NULL) {
+    strcpy(new_filename, filename);
+    char *extension_ptr = strstr(new_filename, ".jobs");
+    if(extension_ptr != NULL) {
+      strcpy(extension_ptr, ".out");
+    }
+  }
+
+  int fd = open(new_filename, O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR);
+  if(fd == -1) {
+      fprintf(stderr, "Failed to open file %s.\n", new_filename);
+      return 1;
+  }
+
   if (event_list->head == NULL) {
     char *no_events = "No events\n";
     size_t lenght_no_events = strlen(no_events);
-    write(STDOUT_FILENO, no_events, lenght_no_events);
+    write(fd, no_events, lenght_no_events);
+    close(fd);
     return 0;
   }
 
@@ -208,13 +241,14 @@ int ems_list_events() {
     
     char *event = "Event: ";
     size_t lenght_event = strlen(event);
-    write(STDOUT_FILENO, event, lenght_event);
+    write(fd, event, lenght_event);
 
     ssize_t len = snprintf(buffer, sizeof(buffer), "%u\n", (current->event)->id);
-    write(STDOUT_FILENO, buffer, (size_t)len);
+    write(fd, buffer, (size_t)len);
 
     current = current->next;
   }
+  close(fd);
 
   return 0;
 }
