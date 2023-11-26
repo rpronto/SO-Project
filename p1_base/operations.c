@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
+#include <string.h>
 
 #include "eventlist.h"
 
@@ -172,14 +174,16 @@ int ems_show(unsigned int event_id) {
   for (size_t i = 1; i <= event->rows; i++) {
     for (size_t j = 1; j <= event->cols; j++) {
       unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
-      printf("%u", *seat);
+      char buffer[100];
+      ssize_t len = snprintf(buffer, sizeof(buffer), "%u", *seat);
+      write(STDOUT_FILENO, buffer, (size_t)len);
 
       if (j < event->cols) {
-        printf(" ");
+        write(STDOUT_FILENO, " ", 1);
       }
     }
 
-    printf("\n");
+    write(STDOUT_FILENO, "\n", 1);
   }
 
   return 0;
@@ -192,14 +196,23 @@ int ems_list_events() {
   }
 
   if (event_list->head == NULL) {
-    printf("No events\n");
+    char *no_events = "No events\n";
+    size_t lenght_no_events = strlen(no_events);
+    write(STDOUT_FILENO, no_events, lenght_no_events);
     return 0;
   }
 
   struct ListNode* current = event_list->head;
   while (current != NULL) {
-    printf("Event: ");
-    printf("%u\n", (current->event)->id);
+    char buffer[100];
+    
+    char *event = "Event: ";
+    size_t lenght_event = strlen(event);
+    write(STDOUT_FILENO, event, lenght_event);
+
+    ssize_t len = snprintf(buffer, sizeof(buffer), "%u\n", (current->event)->id);
+    write(STDOUT_FILENO, buffer, (size_t)len);
+
     current = current->next;
   }
 
