@@ -182,7 +182,7 @@ int ems_show(unsigned int event_id, char *filename) {
     }
   }
 
-  int fd = open(new_filename, O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR);
+  int fd = open(new_filename, O_CREAT | O_APPEND | O_WRONLY , S_IRUSR | S_IWUSR);
   if(fd == -1) {
       fprintf(stderr, "Failed to open file %s.\n", new_filename);
       return 1;
@@ -221,7 +221,7 @@ int ems_list_events(char *filename) {
     }
   }
 
-  int fd = open(new_filename, O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR);
+  int fd = open(new_filename, O_CREAT | O_APPEND | O_WRONLY , S_IRUSR | S_IWUSR);
   if(fd == -1) {
       fprintf(stderr, "Failed to open file %s.\n", new_filename);
       return 1;
