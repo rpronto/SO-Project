@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <fcntl.h>
+#include <sys/wait.h>
 
 #include "constants.h"
 #include "operations.h"
@@ -16,6 +17,9 @@ int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
   unsigned int jobsFlag = 0;
   int fd = STDIN_FILENO;
+  int activeProcesses = 0;
+  long int MAX_PROC;
+  pid_t pid;
   char extension[6];
   strcpy(extension, ".jobs");
   DIR* dir;
@@ -29,7 +33,15 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "Invalid delay value or value too large\n");
       return 1;
     }
-    if (argc > 2) jobsFlag = 1;
+    if (argc > 2) 
+      jobsFlag = 1;
+    if (argc > 3) {
+      MAX_PROC = strtol(argv[3], &endptr, 10);
+      if (*endptr != '\0') {
+        fprintf(stderr, "Invalid MAX_PROC value\n");
+        return 1;
+      }
+    }
 
     state_access_delay_ms = (unsigned int)delay;
   }
@@ -66,105 +78,134 @@ int main(int argc, char *argv[]) {
       strcpy(filename, argv[2]);
       strcat(filename, "/");
       strcat(filename, dp->d_name);
+      pid = fork();
       fd = open(filename, O_RDONLY);
       if (fd == -1) {
         fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
         return 1;
       }
-      printf("%s\n", dp->d_name);
       jobsFlag = 2;
     }
 
-    if (jobsFlag == 0){
-      printf("> ");
-      fflush(stdout);
+    if (pid == -1) {
+      fprintf(stderr, "Failed to fork.\n");
     }
 
-    switch (get_next(fd)) {
-      case CMD_CREATE:
-        if (parse_create(fd, &event_id, &num_rows, &num_columns) != 0) {
+    if (pid == 0) {
+
+      if (jobsFlag == 0){
+        printf("> ");
+        fflush(stdout);
+      }
+
+      switch (get_next(fd)) {
+        case CMD_CREATE:
+          if (parse_create(fd, &event_id, &num_rows, &num_columns) != 0) {
+            fprintf(stderr, "Invalid command. See HELP for usage\n");
+            continue;
+          }
+
+          if (ems_create(event_id, num_rows, num_columns)) {
+            fprintf(stderr, "Failed to create event\n");
+          }
+
+          continue;
+
+        case CMD_RESERVE:
+          num_coords = parse_reserve(fd, MAX_RESERVATION_SIZE, &event_id, xs, ys);
+
+          if (num_coords == 0) {
+            fprintf(stderr, "Invalid command. See HELP for usage\n");
+            continue;
+          }
+
+          if (ems_reserve(event_id, num_coords, xs, ys)) {
+            fprintf(stderr, "Failed to reserve seats\n");
+          }
+
+          continue;
+
+        case CMD_SHOW:
+          if (parse_show(fd, &event_id) != 0) {
+            fprintf(stderr, "Invalid command. See HELP for usage\n");
+            continue;
+          }
+
+          if (ems_show(event_id, filename)) {
+            fprintf(stderr, "Failed to show event\n");
+          }
+
+          continue;
+
+        case CMD_LIST_EVENTS:
+          if (ems_list_events(filename)) {
+            fprintf(stderr, "Failed to list events\n");
+          }
+
+          continue;
+
+        case CMD_WAIT:
+          if (parse_wait(fd, &delay, NULL) == -1) {  // thread_id is not implemented
+            fprintf(stderr, "Invalid command. See HELP for usage\n");
+            continue;
+          }
+
+          if (delay > 0) {
+            printf("Waiting...\n");
+            ems_wait(delay);
+          }
+
+          continue;
+
+        case CMD_INVALID:
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
-        }
 
-        if (ems_create(event_id, num_rows, num_columns)) {
-          fprintf(stderr, "Failed to create event\n");
-        }
+        case CMD_HELP:
+          printf(
+              "Available commands:\n"
+              "  CREATE <event_id> <num_rows> <num_columns>\n"
+              "  RESERVE <event_id> [(<x1>,<y1>) (<x2>,<y2>) ...]\n"
+              "  SHOW <event_id>\n"
+              "  LIST\n"
+              "  WAIT <delay_ms> [thread_id]\n"  // thread_id is not implemented
+              "  BARRIER\n"                      // Not implemented
+              "  HELP\n");
 
-        continue;
-
-      case CMD_RESERVE:
-        num_coords = parse_reserve(fd, MAX_RESERVATION_SIZE, &event_id, xs, ys);
-
-        if (num_coords == 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
-        }
 
-        if (ems_reserve(event_id, num_coords, xs, ys)) {
-          fprintf(stderr, "Failed to reserve seats\n");
-        }
-
-        continue;
-
-      case CMD_SHOW:
-        if (parse_show(fd, &event_id) != 0) {
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
+        case CMD_BARRIER:  // Not implemented
+        case CMD_EMPTY:
           continue;
+
+        case EOC:
+          break;
+      }
+      close(fd);
+      exit(0);
+    } else {
+      activeProcesses++;
+      int status;
+      while (activeProcesses >= MAX_PROC) {
+        pid = wait(&status);
+        if (pid == -1) {
+          fprintf(stderr, "Failed to wait the child process.\n");
+          return 1;
         }
-
-        if (ems_show(event_id, filename)) {
-          fprintf(stderr, "Failed to show event\n");
-        }
-
-        continue;
-
-      case CMD_LIST_EVENTS:
-        if (ems_list_events(filename)) {
-          fprintf(stderr, "Failed to list events\n");
-        }
-
-        continue;
-
-      case CMD_WAIT:
-        if (parse_wait(fd, &delay, NULL) == -1) {  // thread_id is not implemented
-          fprintf(stderr, "Invalid command. See HELP for usage\n");
-          continue;
-        }
-
-        if (delay > 0) {
-          printf("Waiting...\n");
-          ems_wait(delay);
-        }
-
-        continue;
-
-      case CMD_INVALID:
-        fprintf(stderr, "Invalid command. See HELP for usage\n");
-        continue;
-
-      case CMD_HELP:
-        printf(
-            "Available commands:\n"
-            "  CREATE <event_id> <num_rows> <num_columns>\n"
-            "  RESERVE <event_id> [(<x1>,<y1>) (<x2>,<y2>) ...]\n"
-            "  SHOW <event_id>\n"
-            "  LIST\n"
-            "  WAIT <delay_ms> [thread_id]\n"  // thread_id is not implemented
-            "  BARRIER\n"                      // Not implemented
-            "  HELP\n");
-
-        continue;
-
-      case CMD_BARRIER:  // Not implemented
-      case CMD_EMPTY:
-        continue;
-
-      case EOC:
-      printf("\n");
-        break;
+        activeProcesses--;
+      }
+      pid = wait(&status);
+      if (pid == -1) {
+          fprintf(stderr, "Failed to wait the child process.\n");
+          return 1;
+      }
+      activeProcesses--;
+      if (WIFEXITED(status)) {
+        printf("Child process with exit status %d.\n", WEXITSTATUS(status));
+      }
+      
     }
-    close(fd);
+
     if (jobsFlag == 2) {
       do {
         dp = readdir(dir);
@@ -177,12 +218,12 @@ int main(int argc, char *argv[]) {
       strcpy(filename, argv[2]);
       strcat(filename, "/");
       strcat(filename, dp->d_name);
+      pid = fork();
       fd = open(filename, O_RDONLY); 
       if (fd == -1) {
         fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
         return 1;
       }
-      printf("%s\n", dp->d_name);
     }  
   }
   ems_terminate();
