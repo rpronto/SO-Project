@@ -78,7 +78,10 @@ int main(int argc, char *argv[]) {
       strcpy(filename, argv[2]);
       strcat(filename, "/");
       strcat(filename, dp->d_name);
-      pid = fork();
+      if(activeProcesses <= MAX_PROC) {
+        pid = fork();
+        activeProcesses++;
+      }
       fd = open(filename, O_RDONLY);
       if (fd == -1) {
         fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
@@ -86,11 +89,11 @@ int main(int argc, char *argv[]) {
       }
       jobsFlag = 2;
     }
-
     if (pid == -1) {
       fprintf(stderr, "Failed to fork.\n");
+      activeProcesses--;
     }
-
+    
     if (pid == 0) {
 
       if (jobsFlag == 0){
@@ -131,14 +134,14 @@ int main(int argc, char *argv[]) {
             continue;
           }
 
-          if (ems_show(event_id, filename)) {
+          if (ems_show(event_id, filename, jobsFlag)) {
             fprintf(stderr, "Failed to show event\n");
           }
 
           continue;
 
         case CMD_LIST_EVENTS:
-          if (ems_list_events(filename)) {
+          if (ems_list_events(filename, jobsFlag)) {
             fprintf(stderr, "Failed to list events\n");
           }
 
@@ -184,26 +187,19 @@ int main(int argc, char *argv[]) {
       close(fd);
       exit(0);
     } else {
-      activeProcesses++;
       int status;
-      while (activeProcesses >= MAX_PROC) {
+      while (activeProcesses > 0) {
         pid = wait(&status);
         if (pid == -1) {
           fprintf(stderr, "Failed to wait the child process.\n");
+          activeProcesses--;
           return 1;
+        }
+        if (WIFEXITED(status)) {
+          printf("Child process with exit status %d.\n", WEXITSTATUS(status));
         }
         activeProcesses--;
       }
-      pid = wait(&status);
-      if (pid == -1) {
-          fprintf(stderr, "Failed to wait the child process.\n");
-          return 1;
-      }
-      activeProcesses--;
-      if (WIFEXITED(status)) {
-        printf("Child process with exit status %d.\n", WEXITSTATUS(status));
-      }
-      
     }
 
     if (jobsFlag == 2) {
@@ -218,7 +214,10 @@ int main(int argc, char *argv[]) {
       strcpy(filename, argv[2]);
       strcat(filename, "/");
       strcat(filename, dp->d_name);
-      pid = fork();
+      if(activeProcesses <= MAX_PROC) {
+        pid = fork();
+        activeProcesses++;
+      }
       fd = open(filename, O_RDONLY); 
       if (fd == -1) {
         fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
