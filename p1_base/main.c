@@ -24,27 +24,30 @@ int main(int argc, char *argv[]) {
   strcpy(extension, ".jobs");
   DIR* dir;
   dirent* dp;
- 
-  if (argc > 1) {
-    char *endptr;
-    unsigned long int delay = strtoul(argv[1], &endptr, 10);
-
-    if (*endptr != '\0' || delay > UINT_MAX) {
-      fprintf(stderr, "Invalid delay value or value too large\n");
-      return 1;
-    }
-    if (argc > 2) 
+  
+  if (argc > 1) 
       jobsFlag = 1;
-    if (argc > 3) {
-      MAX_PROC = strtol(argv[3], &endptr, 10);
-      if (*endptr != '\0') {
-        fprintf(stderr, "Invalid MAX_PROC value\n");
+
+  if (argc > 2) {
+    char *endptr;
+    
+    if(argc > 4) {
+      unsigned long int delay = strtoul(argv[4], &endptr, 10);
+
+      if (*endptr != '\0' || delay > UINT_MAX) {
+        fprintf(stderr, "Invalid delay value or value too large\n");
         return 1;
       }
+      state_access_delay_ms = (unsigned int)delay;
+    }  
+      
+    MAX_PROC = strtol(argv[2], &endptr, 10);
+    if (*endptr != '\0') {
+      fprintf(stderr, "Invalid MAX_PROC value\n");
+      return 1;
     }
-
-    state_access_delay_ms = (unsigned int)delay;
   }
+  
 
   if (ems_init(state_access_delay_ms)) {
     fprintf(stderr, "Failed to initialize EMS\n");
@@ -58,24 +61,24 @@ int main(int argc, char *argv[]) {
     char filename[256];
     
     if(jobsFlag == 1){
-      dir = opendir(argv[2]);
+      dir = opendir(argv[1]);
       if (dir == NULL) {
-        fprintf(stderr, "Failed to open directory %s.\n", argv[2]);
+        fprintf(stderr, "Failed to open directory %s.\n", argv[1]);
         return 1;
       }
       dp = readdir(dir);
       if (dp == NULL) {
-        fprintf(stderr, "Failed to read directory %s.\n", argv[2]);
+        fprintf(stderr, "Failed to read directory %s.\n", argv[1]);
         return 1;
       }
       while(strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0 || strstr(dp->d_name, extension) == NULL) {
         dp = readdir(dir);
         if (dp == NULL) {
-          fprintf(stderr, "Failed to read directory %s.\n", argv[2]);
+          fprintf(stderr, "Failed to read directory %s.\n", argv[1]);
           return 1;
         }
       }
-      strcpy(filename, argv[2]);
+      strcpy(filename, argv[1]);
       strcat(filename, "/");
       strcat(filename, dp->d_name);
       if(activeProcesses <= MAX_PROC) {
@@ -211,7 +214,7 @@ int main(int argc, char *argv[]) {
         closedir(dir);
         break;
       }
-      strcpy(filename, argv[2]);
+      strcpy(filename, argv[1]);
       strcat(filename, "/");
       strcat(filename, dp->d_name);
       if(activeProcesses <= MAX_PROC) {
