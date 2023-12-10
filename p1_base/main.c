@@ -5,6 +5,7 @@
 #include <dirent.h>
 #include <string.h>
 #include <fcntl.h>
+#include <pthread.h>
 #include <sys/wait.h>
 
 #include "constants.h"
@@ -12,6 +13,12 @@
 #include "parser.h"
 
 typedef struct dirent dirent;
+
+typedef struct {
+  int fd;
+  unsigned int jobsFlag;
+  char *filename;
+} threadArgs;
 
 void processFile(int fd, unsigned int jobsFlag, char *filename) {
   unsigned int event_id, delay = 0;
@@ -95,6 +102,16 @@ void processFile(int fd, unsigned int jobsFlag, char *filename) {
   }
 }
 
+void *threadFunction(void *arg) {
+  threadArgs *thread = (threadArgs *)arg;
+
+  processFile(thread->fd, thread->jobsFlag, thread->filename);
+
+  free(thread->filename);
+  free(thread);
+  return NULL;
+}
+
 
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
@@ -102,7 +119,7 @@ int main(int argc, char *argv[]) {
   int fd = STDIN_FILENO;
   int activeProcesses = 0;
   long int MAX_PROC;
-  /*long int MAX_THREADS;*/
+  long int MAX_THREADS;
   char extension[6];
   pid_t pid;
   DIR* dir;
@@ -122,13 +139,13 @@ int main(int argc, char *argv[]) {
       return 1;
     }
 
-    /*if (argc > 3) {
+    if (argc > 3) {
       MAX_THREADS = strtol(argv[3], &endptr, 10);
       if (*endptr != '\0') {
         fprintf(stderr, "Invalid MAX_PROC value\n");
         return 1;
       }
-    }*/
+    }
 
     if(argc > 4) {
       unsigned long int delay = strtoul(argv[4], &endptr, 10);
@@ -194,7 +211,28 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "Failed to fork.\n");
       activeProcesses--;
     } else if (pid == 0) {
-      processFile(fd, jobsFlag, filename);
+      pthread_t threads[MAX_THREADS];
+
+      for (int i = 0; i < MAX_THREADS; i++) {
+
+        threadArgs *thread = malloc(sizeof(threadArgs));
+        thread->fd = fd;
+        thread->jobsFlag = jobsFlag;
+        thread->filename = strdup(filename);
+
+        if (pthread_create(&threads[i], NULL, threadFunction, (void *) thread) != 0) {
+          fprintf(stderr, "Failed to create thread.\n");
+          return 1;
+        }
+      }
+
+      for (int i = 0; i < MAX_THREADS; i++) {
+        if (pthread_join(threads[i], NULL) != 0) {
+          fprintf(stderr, "Failed to wait thread.\n");
+          return 1;
+        }
+      }
+      
       close(fd);
       exit(0);
     } else {
