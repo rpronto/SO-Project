@@ -20,6 +20,8 @@ typedef struct {
   char *filename;
 } threadArgs;
 
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
 void processFile(int fd, unsigned int jobsFlag, char *filename) {
   unsigned int event_id, delay = 0;
   size_t num_rows, num_columns, num_coords;
@@ -31,9 +33,8 @@ void processFile(int fd, unsigned int jobsFlag, char *filename) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
-        if (ems_create(event_id, num_rows, num_columns)) {
+        if (ems_create(event_id, num_rows, num_columns)) 
           fprintf(stderr, "Failed to create event\n");
-        }
         continue;
 
       case CMD_RESERVE:
@@ -42,9 +43,8 @@ void processFile(int fd, unsigned int jobsFlag, char *filename) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
-        if (ems_reserve(event_id, num_coords, xs, ys)) {
+        if (ems_reserve(event_id, num_coords, xs, ys)) 
           fprintf(stderr, "Failed to reserve seats\n");
-        }
         continue;
 
       case CMD_SHOW:
@@ -52,15 +52,13 @@ void processFile(int fd, unsigned int jobsFlag, char *filename) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
-        if (ems_show(event_id, filename, jobsFlag)) {
+        if (ems_show(event_id, filename, jobsFlag)) 
           fprintf(stderr, "Failed to show event\n");
-        }
         continue;
 
       case CMD_LIST_EVENTS:
-        if (ems_list_events(filename, jobsFlag)) {
+        if (ems_list_events(filename, jobsFlag)) 
           fprintf(stderr, "Failed to list events\n");
-        }
         continue;
 
       case CMD_WAIT:
@@ -109,7 +107,7 @@ void *threadFunction(void *arg) {
 
   free(thread->filename);
   free(thread);
-  return NULL;
+  pthread_exit(NULL);
 }
 
 
