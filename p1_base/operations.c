@@ -160,7 +160,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   return 0;
 }
 
-int ems_show(unsigned int event_id, char *filename) {
+int ems_show(unsigned int event_id, char *filename, unsigned int jobsFlag) {
   char new_filename[256];
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
@@ -182,31 +182,33 @@ int ems_show(unsigned int event_id, char *filename) {
     }
   }
 
-  int fd = open(new_filename, O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR);
-  if(fd == -1) {
-      fprintf(stderr, "Failed to open file %s.\n", new_filename);
-      return 1;
-  }
-
-  for (size_t i = 1; i <= event->rows; i++) {
-    for (size_t j = 1; j <= event->cols; j++) {
-      unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
-      char buffer[100];
-      ssize_t len = snprintf(buffer, sizeof(buffer), "%u", *seat);
-      write(fd, buffer, (size_t)len);
-
-      if (j < event->cols) {
-        write(fd, " ", 1);
-      }
+  if (jobsFlag > 0) {
+    int fd = open(new_filename, O_CREAT | O_APPEND | O_WRONLY , S_IRUSR | S_IWUSR);
+    if(fd == -1) {
+        fprintf(stderr, "Failed to open file %s.\n", new_filename);
+        return 1;
     }
 
-    write(fd, "\n", 1);
+    for (size_t i = 1; i <= event->rows; i++) {
+      for (size_t j = 1; j <= event->cols; j++) {
+        unsigned int* seat = get_seat_with_delay(event, seat_index(event, i, j));
+        char buffer[100];
+        ssize_t len = snprintf(buffer, sizeof(buffer), "%u", *seat);
+        write(fd, buffer, (size_t)len);
+
+        if (j < event->cols) {
+          write(fd, " ", 1);
+        }
+      }
+
+      write(fd, "\n", 1);
+    }
+    close(fd);
   }
-  close(fd);
   return 0;
 }
 
-int ems_list_events(char *filename) {
+int ems_list_events(char *filename, unsigned int jobsFlag) {
   char new_filename[256];
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
@@ -221,35 +223,36 @@ int ems_list_events(char *filename) {
     }
   }
 
-  int fd = open(new_filename, O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR);
-  if(fd == -1) {
-      fprintf(stderr, "Failed to open file %s.\n", new_filename);
-      return 1;
-  }
+  if (jobsFlag > 0) {
+    int fd = open(new_filename, O_CREAT | O_APPEND | O_WRONLY , S_IRUSR | S_IWUSR);
+    if(fd == -1) {
+        fprintf(stderr, "Failed to open file %s.\n", new_filename);
+        return 1;
+    }
 
-  if (event_list->head == NULL) {
-    char *no_events = "No events\n";
-    size_t lenght_no_events = strlen(no_events);
-    write(fd, no_events, lenght_no_events);
+    if (event_list->head == NULL) {
+      char *no_events = "No events\n";
+      size_t lenght_no_events = strlen(no_events);
+      write(fd, no_events, lenght_no_events);
+      close(fd);
+      return 0;
+    }
+
+    struct ListNode* current = event_list->head;
+    while (current != NULL) {
+      char buffer[100];
+
+      char *event = "Event: ";
+      size_t lenght_event = strlen(event);
+      write(fd, event, lenght_event);
+
+      ssize_t len = snprintf(buffer, sizeof(buffer), "%u\n", (current->event)->id);
+      write(fd, buffer, (size_t)len);
+
+      current = current->next;
+    }
     close(fd);
-    return 0;
   }
-
-  struct ListNode* current = event_list->head;
-  while (current != NULL) {
-    char buffer[100];
-    
-    char *event = "Event: ";
-    size_t lenght_event = strlen(event);
-    write(fd, event, lenght_event);
-
-    ssize_t len = snprintf(buffer, sizeof(buffer), "%u\n", (current->event)->id);
-    write(fd, buffer, (size_t)len);
-
-    current = current->next;
-  }
-  close(fd);
-
   return 0;
 }
 
