@@ -11,14 +11,9 @@
 #include "constants.h"
 #include "operations.h"
 #include "parser.h"
+#include "thread.h"
 
 typedef struct dirent dirent;
-
-typedef struct {
-  int fd;
-  unsigned int jobsFlag;
-  char *filename;
-} threadArgs;
 
 pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -100,15 +95,6 @@ void processFile(int fd, unsigned int jobsFlag, char *filename) {
   }
 }
 
-void *threadFunction(void *arg) {
-  threadArgs *thread = (threadArgs *)arg;
-
-  processFile(thread->fd, thread->jobsFlag, thread->filename);
-
-  free(thread->filename);
-  free(thread);
-  pthread_exit(NULL);
-}
 
 
 int main(int argc, char *argv[]) {
@@ -140,7 +126,7 @@ int main(int argc, char *argv[]) {
     if (argc > 3) {
       MAX_THREADS = strtol(argv[3], &endptr, 10);
       if (*endptr != '\0') {
-        fprintf(stderr, "Invalid MAX_PROC value\n");
+        fprintf(stderr, "Invalid MAX_THREADS value\n");
         return 1;
       }
     }
