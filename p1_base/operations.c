@@ -77,8 +77,11 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
     return 1;
   }
 
+  pthread_mutex_lock(&event_list->mutex);
+
   if (get_event_with_delay(event_id) != NULL) {
     fprintf(stderr, "Event already exists\n");
+    pthread_mutex_unlock(&event_list->mutex);
     return 1;
   }
 
@@ -86,6 +89,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
 
   if (event == NULL) {
     fprintf(stderr, "Error allocating memory for event\n");
+    pthread_mutex_unlock(&event_list->mutex);
     return 1;
   }
 
@@ -98,6 +102,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   if (event->data == NULL) {
     fprintf(stderr, "Error allocating memory for event data\n");
     free(event);
+    pthread_mutex_unlock(&event_list->mutex);
     return 1;
   }
 
@@ -109,9 +114,10 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
     fprintf(stderr, "Error appending event to list\n");
     free(event->data);
     free(event);
+    pthread_mutex_unlock(&event_list->mutex);
     return 1;
   }
-
+  pthread_mutex_unlock(&event_list->mutex);
   return 0;
 }
 
@@ -121,10 +127,13 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
     return 1;
   }
 
+  pthread_mutex_lock(&event_list->mutex);
+
   struct Event* event = get_event_with_delay(event_id);
 
   if (event == NULL) {
     fprintf(stderr, "Event not found\n");
+    pthread_mutex_unlock(&event_list->mutex);
     return 1;
   }
 
@@ -154,9 +163,10 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
     for (size_t j = 0; j < i; j++) {
       *get_seat_with_delay(event, seat_index(event, xs[j], ys[j])) = 0;
     }
+    pthread_mutex_unlock(&event_list->mutex);
     return 1;
   }
-
+  pthread_mutex_unlock(&event_list->mutex);
   return 0;
 }
 
@@ -167,10 +177,13 @@ int ems_show(unsigned int event_id, char *filename, unsigned int jobsFlag) {
     return 1;
   }
 
+  pthread_mutex_lock(&event_list->mutex);
+
   struct Event* event = get_event_with_delay(event_id);
 
   if (event == NULL) {
     fprintf(stderr, "Event not found\n");
+    pthread_mutex_unlock(&event_list->mutex);
     return 1;
   }
 
@@ -186,6 +199,7 @@ int ems_show(unsigned int event_id, char *filename, unsigned int jobsFlag) {
     int fd = open(new_filename, O_CREAT | O_APPEND | O_WRONLY , S_IRUSR | S_IWUSR);
     if(fd == -1) {
         fprintf(stderr, "Failed to open file %s.\n", new_filename);
+        pthread_mutex_unlock(&event_list->mutex);
         return 1;
     }
 
@@ -205,6 +219,7 @@ int ems_show(unsigned int event_id, char *filename, unsigned int jobsFlag) {
     }
     close(fd);
   }
+  pthread_mutex_unlock(&event_list->mutex);
   return 0;
 }
 
@@ -214,6 +229,8 @@ int ems_list_events(char *filename, unsigned int jobsFlag) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;
   }
+
+  pthread_mutex_lock(&event_list->mutex);
 
   if(filename != NULL) {
     strcpy(new_filename, filename);
@@ -227,6 +244,7 @@ int ems_list_events(char *filename, unsigned int jobsFlag) {
     int fd = open(new_filename, O_CREAT | O_APPEND | O_WRONLY , S_IRUSR | S_IWUSR);
     if(fd == -1) {
         fprintf(stderr, "Failed to open file %s.\n", new_filename);
+        pthread_mutex_unlock(&event_list->mutex);
         return 1;
     }
 
@@ -235,6 +253,7 @@ int ems_list_events(char *filename, unsigned int jobsFlag) {
       size_t lenght_no_events = strlen(no_events);
       write(fd, no_events, lenght_no_events);
       close(fd);
+      pthread_mutex_unlock(&event_list->mutex);
       return 0;
     }
 
@@ -253,6 +272,7 @@ int ems_list_events(char *filename, unsigned int jobsFlag) {
     }
     close(fd);
   }
+  pthread_mutex_unlock(&event_list->mutex);
   return 0;
 }
 

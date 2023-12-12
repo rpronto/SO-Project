@@ -8,6 +8,6 @@ typedef struct {
 } threadArgs;
 
 void *threadFunction(void *);
-void processFile(int , unsigned int , char *);
+int processLine(int , unsigned int , char *);
 
 #endif

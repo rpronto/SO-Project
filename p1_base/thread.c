@@ -5,8 +5,8 @@
 
 void *threadFunction(void *arg) {
   threadArgs *thread = (threadArgs *)arg;
-
-  processFile(thread->fd, thread->jobsFlag, thread->filename);
+  
+  while(processLine(thread->fd, thread->jobsFlag, thread->filename) == 0);
 
   free(thread->filename);
   free(thread);
