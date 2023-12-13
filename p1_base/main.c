@@ -220,7 +220,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (WIFEXITED(status)) 
-          printf("Child process with exit status %d.\n", WEXITSTATUS(status));
+          printf("Child %d ID exit with status %d.\n", pid, WEXITSTATUS(status));
         
         activeProcesses--;
       }
