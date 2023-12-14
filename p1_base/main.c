@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 #include "constants.h"
 #include "operations.h"
@@ -18,6 +19,7 @@ typedef struct dirent dirent;
 
 int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag) {
   unsigned int event_id, delay = 0;
+  extern pthread_mutex_t mutex_b;
   size_t num_rows, num_columns, num_coords;
   size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
   
@@ -76,12 +78,15 @@ int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag) {
           "  HELP\n");
       break;
     case CMD_BARRIER:  
+      pthread_mutex_lock(&mutex_b);
       return 2;
     case CMD_EMPTY:
       break;
     case EOC:
+      pthread_mutex_lock(&mutex_b);
       return 1;
   }
+  pthread_mutex_lock(&mutex_b);
   return 0;
 }
 
@@ -91,7 +96,7 @@ int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
   unsigned int jobsFlag = 0;
   int fd_jobs = STDIN_FILENO;
-  int fd_out = STDIN_FILENO;
+  int fd_out = STDOUT_FILENO;
   int activeProcesses = 0;
   long int MAX_PROC;
   long int MAX_THREADS;
@@ -222,7 +227,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Failed to wait thread.\n");
             return 1;
           }
-          threadResult = (long) status;
+          threadResult = *((long *) status);
           free(status);
         }
       }
