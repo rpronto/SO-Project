@@ -6,10 +6,8 @@
 void *threadFunction(void *arg) {
   threadArgs *thread = (threadArgs *)arg;
   
-  while(processLine(thread->fd, thread->jobsFlag, thread->filename) == 0);
+  while(processLine(thread->fd_jobs, thread->fd_out, thread->jobsFlag) == 0);
 
-  free(thread->filename);
-  free(thread);
   pthread_exit(NULL);
 }
 

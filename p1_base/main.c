@@ -16,14 +16,14 @@
 typedef struct dirent dirent;
 
 
-int processLine(int fd, unsigned int jobsFlag, char *filename) {
+int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag) {
   unsigned int event_id, delay = 0;
   size_t num_rows, num_columns, num_coords;
   size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
   
-  switch (get_next(fd)) {
+  switch (get_next(fd_jobs)) {
     case CMD_CREATE:
-      if (parse_create(fd, &event_id, &num_rows, &num_columns) != 0) {
+      if (parse_create(fd_jobs, &event_id, &num_rows, &num_columns) != 0) {
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         break;
       }
@@ -31,7 +31,7 @@ int processLine(int fd, unsigned int jobsFlag, char *filename) {
         fprintf(stderr, "Failed to create event\n");
       break;
     case CMD_RESERVE:
-      num_coords = parse_reserve(fd, MAX_RESERVATION_SIZE, &event_id, xs, ys);
+      num_coords = parse_reserve(fd_jobs, MAX_RESERVATION_SIZE, &event_id, xs, ys);
       if (num_coords == 0) {
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         break;
@@ -40,19 +40,19 @@ int processLine(int fd, unsigned int jobsFlag, char *filename) {
         fprintf(stderr, "Failed to reserve seats\n");
       break;
     case CMD_SHOW:
-      if (parse_show(fd, &event_id) != 0) {
+      if (parse_show(fd_jobs, &event_id) != 0) {
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         break;
       }
-      if (ems_show(event_id, filename, jobsFlag)) 
+      if (ems_show(event_id, jobsFlag, fd_out)) 
         fprintf(stderr, "Failed to show event\n");
       break;
     case CMD_LIST_EVENTS:
-      if (ems_list_events(filename, jobsFlag)) 
+      if (ems_list_events(jobsFlag, fd_out)) 
         fprintf(stderr, "Failed to list events\n");
       break;
     case CMD_WAIT:
-      if (parse_wait(fd, &delay, NULL) == -1) {  // thread_id is not implemented
+      if (parse_wait(fd_jobs, &delay, NULL) == -1) {  // thread_id is not implemented
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         break;
       }
@@ -76,6 +76,7 @@ int processLine(int fd, unsigned int jobsFlag, char *filename) {
           "  HELP\n");
       break;
     case CMD_BARRIER:  // Not implemented
+      return 2;
     case CMD_EMPTY:
       break;
     case EOC:
@@ -89,7 +90,8 @@ int processLine(int fd, unsigned int jobsFlag, char *filename) {
 int main(int argc, char *argv[]) {
   unsigned int state_access_delay_ms = STATE_ACCESS_DELAY_MS;
   unsigned int jobsFlag = 0;
-  int fd = STDIN_FILENO;
+  int fd_jobs = STDIN_FILENO;
+  int fd_out = STDIN_FILENO;
   int activeProcesses = 0;
   long int MAX_PROC;
   long int MAX_THREADS;
@@ -172,8 +174,8 @@ int main(int argc, char *argv[]) {
         pid = fork();
       }
 
-      fd = open(filename, O_RDONLY);
-      if (fd == -1) {
+      fd_jobs = open(filename, O_RDONLY);
+      if (fd_jobs == -1) {
         fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
         return 1;
       }
@@ -185,14 +187,28 @@ int main(int argc, char *argv[]) {
       activeProcesses--;
     } else if (pid == 0) {
       pthread_t threads[MAX_THREADS];
+      char new_filename[256];
+
+      if(filename != NULL) {
+        strcpy(new_filename, filename);
+        char *extension_ptr = strstr(new_filename, ".jobs");
+        if(extension_ptr != NULL) {
+          strcpy(extension_ptr, ".out");
+        }
+      }
+
+      fd_out = open(new_filename, O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR);
+      if(fd_out == -1) {
+        fprintf(stderr, "Failed to open file %s.\n", new_filename);
+        return 1;
+      }
+      
+      threadArgs *thread = malloc(sizeof(threadArgs));
+      thread->fd_jobs = fd_jobs;
+      thread->fd_out = fd_out;
+      thread->jobsFlag = jobsFlag;
 
       for (int i = 0; i < MAX_THREADS; i++) {
-
-        threadArgs *thread = malloc(sizeof(threadArgs));
-        thread->fd = fd;
-        thread->jobsFlag = jobsFlag;
-        thread->filename = strdup(filename);
-
         if (pthread_create(&threads[i], NULL, threadFunction, (void *) thread) != 0) {
           fprintf(stderr, "Failed to create thread.\n");
           return 1;
@@ -205,8 +221,10 @@ int main(int argc, char *argv[]) {
           return 1;
         }
       }
-      
-      close(fd);
+
+      free(thread);
+      close(fd_out);
+      close(fd_jobs);
       exit(0);
     } else {
       int status;
@@ -246,8 +264,8 @@ int main(int argc, char *argv[]) {
         pid = fork();
       }
 
-      fd = open(filename, O_RDONLY); 
-      if (fd == -1) {
+      fd_jobs = open(filename, O_RDONLY); 
+      if (fd_jobs == -1) {
         fprintf(stderr, "Failed to open file %s.\n", dp->d_name);
         return 1;
       }
