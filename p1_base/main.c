@@ -19,7 +19,7 @@ typedef struct dirent dirent;
 
 int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag) {
   unsigned int event_id, delay = 0;
-  
+  extern pthread_mutex_t mutex_b;
   size_t num_rows, num_columns, num_coords;
   size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
   
@@ -77,13 +77,16 @@ int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag) {
           "  BARRIER\n"                      
           "  HELP\n");
       break;
-    case CMD_BARRIER:  
+    case CMD_BARRIER:
+      pthread_mutex_lock(&mutex_b);  
       return 2;
     case CMD_EMPTY:
       break;
     case EOC:
+      pthread_mutex_lock(&mutex_b);
       return 1;
   }
+  pthread_mutex_lock(&mutex_b);
   return 0;
 }
 
