@@ -1,12 +1,15 @@
 #include "eventlist.h"
 
 #include <stdlib.h>
+#include <stdio.h>
+
 
 struct EventList* create_list() {
   struct EventList* list = (struct EventList*)malloc(sizeof(struct EventList));
   if (!list) return NULL;
   list->head = NULL;
   list->tail = NULL;
+  pthread_mutex_init(&list->mutex, NULL);
   return list;
 }
 

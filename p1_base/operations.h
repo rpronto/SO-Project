@@ -29,11 +29,11 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t *xs, size_t *ys)
 /// Prints the given event.
 /// @param event_id Id of the event to print.
 /// @return 0 if the event was printed successfully, 1 otherwise.
-int ems_show(unsigned int event_id, char *filename, unsigned int jobsFlag);
+int ems_show(unsigned int event_id, unsigned int jobsFlag, int fd_out);
 
 /// Prints all the events.
 /// @return 0 if the events were printed successfully, 1 otherwise.
-int ems_list_events(char *filename, unsigned int jobsFlag);
+int ems_list_events(unsigned int jobsFlag, int fd_out);
 
 /// Waits for a given amount of time.
 /// @param delay_us Delay in milliseconds.
