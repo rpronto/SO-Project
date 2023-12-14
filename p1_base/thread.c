@@ -5,8 +5,15 @@
 
 void *threadFunction(void *arg) {
   threadArgs *thread = (threadArgs *)arg;
-  
-  while(processLine(thread->fd_jobs, thread->fd_out, thread->jobsFlag) == 0);
+  thread->barrierFlag = 0;
+  while(thread->barrierFlag != 1) {
+    if(thread->barrierFlag == 2) {
+      int *status = malloc(sizeof(int));
+      *status = thread->barrierFlag;
+      pthread_exit((void*)status);
+    }
+    thread->barrierFlag = processLine(thread->fd_jobs, thread->fd_out, thread->jobsFlag);
+  }
 
   pthread_exit(NULL);
 }

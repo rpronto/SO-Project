@@ -4,6 +4,7 @@
 typedef struct {
   int fd_jobs;
   int fd_out;
+  int barrierFlag;
   unsigned int jobsFlag;
 } threadArgs;
 

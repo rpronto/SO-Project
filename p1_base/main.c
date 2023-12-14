@@ -72,10 +72,10 @@ int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag) {
           "  SHOW <event_id>\n"
           "  LIST\n"
           "  WAIT <delay_ms> [thread_id]\n"  // thread_id is not implemented
-          "  BARRIER\n"                      // Not implemented
+          "  BARRIER\n"                      
           "  HELP\n");
       break;
-    case CMD_BARRIER:  // Not implemented
+    case CMD_BARRIER:  
       return 2;
     case CMD_EMPTY:
       break;
@@ -188,15 +188,14 @@ int main(int argc, char *argv[]) {
     } else if (pid == 0) {
       pthread_t threads[MAX_THREADS];
       char new_filename[256];
+      long threadResult = 2;
 
-      if(filename != NULL) {
-        strcpy(new_filename, filename);
-        char *extension_ptr = strstr(new_filename, ".jobs");
-        if(extension_ptr != NULL) {
-          strcpy(extension_ptr, ".out");
-        }
+      strcpy(new_filename, filename);
+      char *extension_ptr = strstr(new_filename, ".jobs");
+      if(extension_ptr != NULL) {
+        strcpy(extension_ptr, ".out");
       }
-
+      
       fd_out = open(new_filename, O_CREAT | O_TRUNC | O_WRONLY , S_IRUSR | S_IWUSR);
       if(fd_out == -1) {
         fprintf(stderr, "Failed to open file %s.\n", new_filename);
@@ -207,18 +206,24 @@ int main(int argc, char *argv[]) {
       thread->fd_jobs = fd_jobs;
       thread->fd_out = fd_out;
       thread->jobsFlag = jobsFlag;
+      thread->barrierFlag = 0;
 
-      for (int i = 0; i < MAX_THREADS; i++) {
-        if (pthread_create(&threads[i], NULL, threadFunction, (void *) thread) != 0) {
-          fprintf(stderr, "Failed to create thread.\n");
-          return 1;
+      while(threadResult == 2) {
+        for (int i = 0; i < MAX_THREADS; i++) {
+          if (pthread_create(&threads[i], NULL, threadFunction, (void *) thread) != 0) {
+            fprintf(stderr, "Failed to create thread.\n");
+            return 1;
+          }
         }
-      }
 
-      for (int i = 0; i < MAX_THREADS; i++) {
-        if (pthread_join(threads[i], NULL) != 0) {
-          fprintf(stderr, "Failed to wait thread.\n");
-          return 1;
+        for (int i = 0; i < MAX_THREADS; i++) {
+          void *status;
+          if (pthread_join(threads[i], &status) != 0) {
+            fprintf(stderr, "Failed to wait thread.\n");
+            return 1;
+          }
+          threadResult = (long) status;
+          free(status);
         }
       }
 
