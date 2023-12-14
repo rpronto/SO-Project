@@ -77,7 +77,11 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
     return 1;
   }
 
-  pthread_mutex_lock(&event_list->mutex);
+  if(pthread_mutex_lock(&event_list->mutex) != 0) {
+    fprintf(stderr, "Failed mutex lock.\n");
+    pthread_mutex_unlock(&event_list->mutex);
+    return 1;
+  }
 
   if (get_event_with_delay(event_id) != NULL) {
     fprintf(stderr, "Event already exists\n");
@@ -127,7 +131,11 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
     return 1;
   }
 
-  pthread_mutex_lock(&event_list->mutex);
+  if(pthread_mutex_lock(&event_list->mutex) != 0) {
+    fprintf(stderr, "Failed mutex lock.\n");
+    pthread_mutex_unlock(&event_list->mutex);
+    return 1;
+  }
 
   struct Event* event = get_event_with_delay(event_id);
 
@@ -176,7 +184,11 @@ int ems_show(unsigned int event_id, unsigned int jobsFlag, int fd_out) {
     return 1;
   }
 
-  pthread_mutex_lock(&event_list->mutex);
+  if(pthread_mutex_lock(&event_list->mutex) != 0) {
+    fprintf(stderr, "Failed mutex lock.\n");
+    pthread_mutex_unlock(&event_list->mutex);
+    return 1;
+  }
 
   struct Event* event = get_event_with_delay(event_id);
 
@@ -212,7 +224,11 @@ int ems_list_events(unsigned int jobsFlag, int fd_out) {
     return 1;
   }
 
-  pthread_mutex_lock(&event_list->mutex);
+  if(pthread_mutex_lock(&event_list->mutex) != 0) {
+    fprintf(stderr, "Failed mutex lock.\n");
+    pthread_mutex_unlock(&event_list->mutex);
+    return 1;
+  }
 
     if(jobsFlag > 0) {
       if (event_list->head == NULL) {

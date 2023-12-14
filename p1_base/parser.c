@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdio.h>
 
 #include "constants.h"
 
@@ -49,7 +50,12 @@ static void cleanup(int fd) {
 
 enum Command get_next(int fd) {
   char buf[16];
-  pthread_mutex_lock(&mutex_in);
+  if(pthread_mutex_lock(&mutex_in) != 0) {
+    fprintf(stderr, "Failed mutex lock.\n");
+    pthread_mutex_unlock(&mutex_in);
+    return EOC;
+  }
+  
   if (read(fd, buf, 1) != 1) {
     pthread_mutex_unlock(&mutex_in);
     return EOC;
