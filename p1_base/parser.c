@@ -153,7 +153,6 @@ enum Command get_next(int fd) {
 
 int parse_create(int fd, unsigned int *event_id, size_t *num_rows, size_t *num_cols) {
   char ch;
-  pthread_mutex_lock(&mutex_in);
   if (read_uint(fd, event_id, &ch) != 0 || ch != ' ') {
     cleanup(fd);
     pthread_mutex_unlock(&mutex_in);
@@ -182,7 +181,6 @@ int parse_create(int fd, unsigned int *event_id, size_t *num_rows, size_t *num_c
 
 size_t parse_reserve(int fd, size_t max, unsigned int *event_id, size_t *xs, size_t *ys) {
   char ch;
-  pthread_mutex_lock(&mutex_in);
   if (read_uint(fd, event_id, &ch) != 0 || ch != ' ') {
     cleanup(fd);
     pthread_mutex_unlock(&mutex_in);
@@ -249,7 +247,6 @@ size_t parse_reserve(int fd, size_t max, unsigned int *event_id, size_t *xs, siz
 
 int parse_show(int fd, unsigned int *event_id) {
   char ch;
-  pthread_mutex_lock(&mutex_in);
   if (read_uint(fd, event_id, &ch) != 0 || (ch != '\n' && ch != '\0')) {
     cleanup(fd);
     pthread_mutex_unlock(&mutex_in);
@@ -261,7 +258,6 @@ int parse_show(int fd, unsigned int *event_id) {
 
 int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id) {
   char ch;
-  pthread_mutex_lock(&mutex_in);
   if (read_uint(fd, delay, &ch) != 0) {
     cleanup(fd);
     pthread_mutex_unlock(&mutex_in);
