@@ -17,7 +17,7 @@
 typedef struct dirent dirent;
 
 
-int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag) {
+int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag, int *barrierFlag) {
   unsigned int event_id, delay = 0;
   extern pthread_mutex_t mutex_b;
   size_t num_rows, num_columns, num_coords;
@@ -87,6 +87,9 @@ int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag) {
       return 1;
   }
   pthread_mutex_lock(&mutex_b);
+  if(*barrierFlag == 2) {
+    return 2;
+  }
   return 0;
 }
 

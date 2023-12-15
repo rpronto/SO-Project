@@ -18,7 +18,7 @@ void *threadFunction(void *arg) {
       pthread_exit((void*)status);
     }
     pthread_mutex_unlock(&mutex_b);
-    thread->barrierFlag = processLine(thread->fd_jobs, thread->fd_out, thread->jobsFlag);
+    thread->barrierFlag = processLine(thread->fd_jobs, thread->fd_out, thread->jobsFlag, &thread->barrierFlag);
     
     if (thread->barrierFlag == 1) {
       pthread_mutex_unlock(&mutex_b);
@@ -27,7 +27,7 @@ void *threadFunction(void *arg) {
     pthread_mutex_unlock(&mutex_b);
   }
   pthread_mutex_lock(&mutex_b);
-  *status = 0;
+  *status = thread->barrierFlag;
   pthread_mutex_unlock(&mutex_b);
   pthread_exit((void*) status); 
 }

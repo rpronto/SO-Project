@@ -9,6 +9,6 @@ typedef struct {
 } threadArgs;
 
 void *threadFunction(void *);
-int processLine(int , int ,unsigned int);
+int processLine(int , int ,unsigned int, int*);
 
 #endif
