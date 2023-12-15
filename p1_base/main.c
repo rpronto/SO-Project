@@ -17,8 +17,9 @@
 typedef struct dirent dirent;
 
 
-int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag, int *barrierFlag) {
-  unsigned int event_id, delay = 0;
+int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag, int *barrierFlag, unsigned long **delayTable) {
+  unsigned int event_id, thread_id;
+  unsigned long delay;
   extern pthread_mutex_t mutex_b;
   size_t num_rows, num_columns, num_coords;
   size_t xs[MAX_RESERVATION_SIZE], ys[MAX_RESERVATION_SIZE];
@@ -54,13 +55,13 @@ int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag, int *barrierFlag
         fprintf(stderr, "Failed to list events\n");
       break;
     case CMD_WAIT:
-      if (parse_wait(fd_jobs, &delay, NULL) == -1) {  // thread_id is not implemented
+      if (parse_wait(fd_jobs, (unsigned int*)&delay, &thread_id) == -1) {  
         fprintf(stderr, "Invalid command. See HELP for usage\n");
         break;
       }
       if (delay > 0) {
-        printf("Waiting...\n");
-        ems_wait(delay);
+        pthread_mutex_lock(&mutex_b);
+        delayTable[thread_id][1] = delay;
       }
       break;
     case CMD_INVALID:
@@ -213,6 +214,12 @@ int main(int argc, char *argv[]) {
       thread->fd_jobs = fd_jobs;
       thread->fd_out = fd_out;
       thread->jobsFlag = jobsFlag;
+      thread->delayTable = (unsigned long **) malloc(sizeof(unsigned long *) * (unsigned long)MAX_THREADS);
+      thread->MAX_THREADS = (unsigned long)MAX_THREADS;
+      for (int i = 0; i < MAX_THREADS; i++) {
+        thread->delayTable[i] = (unsigned long *) malloc(sizeof(unsigned long) * 2);
+        thread->delayTable[i][1] = 0;
+      }
 
       while(threadResult == 2) {
         thread->barrierFlag = 0;
@@ -221,6 +228,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Failed to create thread.\n");
             return 1;
           }
+          thread->delayTable[i][0] = threads[i]; //data race com thread.c:21
         }
 
         for (int i = 0; i < MAX_THREADS; i++) {
@@ -234,6 +242,10 @@ int main(int argc, char *argv[]) {
         }
       }
 
+      for (int i = 0; i < MAX_THREADS; i++) {
+        free(thread->delayTable[i]);
+      }
+      free(thread->delayTable);
       free(thread);
       close(fd_out);
       close(fd_jobs);
