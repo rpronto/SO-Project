@@ -1,3 +1,8 @@
+/*  Grupo: 1
+    Guilherme Lobo Rodrigues da Silva Gomes  ist103206
+    Rafael Alexandre Proenca Pronto          ist1105672
+*/
+
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
