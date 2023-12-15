@@ -1,5 +1,5 @@
 /*  Grupo: 1
-    Guilherme Lobo Rodrigues da Silva Gomes  ist103206
+    Guilherme Lobo Rodrigues da Silva Gomes  ist1103206
     Rafael Alexandre Proenca Pronto          ist1105672
 */
 
