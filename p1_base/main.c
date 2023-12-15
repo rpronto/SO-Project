@@ -18,7 +18,8 @@ typedef struct dirent dirent;
 
 
 int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag, int *barrierFlag, unsigned long **delayTable) {
-  unsigned int event_id, thread_id;
+  int thread_id = -1;
+  unsigned int event_id;
   unsigned long delay;
   extern pthread_mutex_t mutex_b;
   size_t num_rows, num_columns, num_coords;
@@ -60,8 +61,14 @@ int processLine(int fd_jobs, int fd_out, unsigned int jobsFlag, int *barrierFlag
         break;
       }
       if (delay > 0) {
-        pthread_mutex_lock(&mutex_b);
-        delayTable[thread_id][1] = delay;
+        if(thread_id == -1) {
+          printf("Waiting...\n");
+          ems_wait((unsigned int) delay);
+        } else {
+          pthread_mutex_lock(&mutex_b);
+          delayTable[thread_id][1] = delay;
+          pthread_mutex_unlock(&mutex_b);
+        }
       }
       break;
     case CMD_INVALID:
@@ -104,6 +111,7 @@ int main(int argc, char *argv[]) {
   long int MAX_PROC;
   long int MAX_THREADS;
   char extension[6];
+  extern pthread_mutex_t mutex_b;
   pid_t pid;
   DIR* dir;
   dirent* dp;
@@ -216,6 +224,7 @@ int main(int argc, char *argv[]) {
       thread->jobsFlag = jobsFlag;
       thread->delayTable = (unsigned long **) malloc(sizeof(unsigned long *) * (unsigned long)MAX_THREADS);
       thread->MAX_THREADS = (unsigned long)MAX_THREADS;
+
       for (int i = 0; i < MAX_THREADS; i++) {
         thread->delayTable[i] = (unsigned long *) malloc(sizeof(unsigned long) * 2);
         thread->delayTable[i][1] = 0;
@@ -224,11 +233,14 @@ int main(int argc, char *argv[]) {
       while(threadResult == 2) {
         thread->barrierFlag = 0;
         for (int i = 0; i < MAX_THREADS; i++) {
+          pthread_mutex_lock(&mutex_b);
           if (pthread_create(&threads[i], NULL, threadFunction, (void *) thread) != 0) {
             fprintf(stderr, "Failed to create thread.\n");
+            pthread_mutex_unlock(&mutex_b);
             return 1;
-          }
-          thread->delayTable[i][0] = threads[i]; //data race com thread.c:21
+          } 
+          thread->delayTable[i][0] = threads[i]; 
+          pthread_mutex_unlock(&mutex_b);
         }
 
         for (int i = 0; i < MAX_THREADS; i++) {

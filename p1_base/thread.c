@@ -18,11 +18,10 @@ void *threadFunction(void *arg) {
     pthread_mutex_lock(&mutex_b);
     if (*thread_id == 0) {
       for (unsigned int i = 0; i < thread->MAX_THREADS; i++) {
-        if (thread->delayTable[i][0] == pthread_self()) { //data race com main.c:231
+        if (thread->delayTable[i][0] == pthread_self()) { 
           *thread_id = (unsigned long) i;
           break;
         }
-        fprintf(stderr, "Failed to find thread id.\n");
       }
     }
     if(thread->delayTable[*thread_id][1] > 0) {
@@ -32,6 +31,7 @@ void *threadFunction(void *arg) {
     if(thread->barrierFlag == 2) {
       *status = thread->barrierFlag;
       pthread_mutex_unlock(&mutex_b);
+      free(thread_id);
       pthread_exit((void*)status);
     }
     pthread_mutex_unlock(&mutex_b);
@@ -46,6 +46,7 @@ void *threadFunction(void *arg) {
   pthread_mutex_lock(&mutex_b);
   *status = thread->barrierFlag;
   pthread_mutex_unlock(&mutex_b);
+  free(thread_id);
   pthread_exit((void*) status); 
 }
 

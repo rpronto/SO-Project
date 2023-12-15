@@ -262,7 +262,7 @@ int parse_show(int fd, unsigned int *event_id) {
   return 0;
 }
 
-int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id) {
+int parse_wait(int fd, unsigned int *delay, int *thread_id) {
   char ch;
   if (read_uint(fd, delay, &ch) != 0) {
     cleanup(fd);
@@ -277,7 +277,7 @@ int parse_wait(int fd, unsigned int *delay, unsigned int *thread_id) {
       return 0;
     }
 
-    if (read_uint(fd, thread_id, &ch) != 0 || (ch != '\n' && ch != '\0')) {
+    if (read_uint(fd, (unsigned int*)thread_id, &ch) != 0 || (ch != '\n' && ch != '\0')) {
       cleanup(fd);
       pthread_mutex_unlock(&mutex_in);
       return -1;
