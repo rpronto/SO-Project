@@ -10,30 +10,9 @@
 
 #include "api.h"
 #include "common/constants.h"
+#include "common/io.h"
 
-void send_msg (int fd, char const *msg) {
-  size_t len = strlen(msg), written = 0;
-  while (written < len) {
-    ssize_t bytes_written; 
-    if ((bytes_written = write(fd, msg + written, len - written)) < 0) {
-      fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-    written += (size_t)bytes_written;
-  }
-}
-
-void read_msg (int fd, char *buffer) {
-  size_t len = strlen(buffer), already_read = 0;
-  while (already_read < len) {
-    ssize_t bytes_read;
-    if ((bytes_read = read(fd, buffer + already_read, len - already_read)) < 0) {
-      fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
-      exit(EXIT_FAILURE);
-    }
-    already_read += (size_t)bytes_read;
-  }
-}
+int session_id;
 
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
   //TODO: create pipes and connect to the server
@@ -67,15 +46,17 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
       return 1;
   }
   char msg[MAX_PIPE_LENGHT * 2 + 2];
+  char buffer[128];
   int op_code = 1;
   sprintf(msg, "%c%s%s", op_code, req_pipe_path, resp_pipe_path);
   send_msg(fd_serv, msg);
-  
+  read_msg(fd_resp, buffer);
 
+  session_id = atoi(buffer);
 
   return 0;
 }
-
+/*
 int ems_quit(void) { 
   //TODO: close pipes
   return 1;
@@ -100,3 +81,4 @@ int ems_list_events(int out_fd) {
   //TODO: send list request to the server (through the request pipe) and wait for the response (through the response pipe)
   return 1;
 }
+*/

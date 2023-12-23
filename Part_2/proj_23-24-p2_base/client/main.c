@@ -8,7 +8,7 @@
 #include "parser.h"
 
 int main(int argc, char* argv[]) {
-  int session_id;
+  
   
   if (argc < 5) {
     fprintf(stderr, "Usage: %s <request pipe path> <response pipe path> <server pipe path> <.jobs file path>\n",

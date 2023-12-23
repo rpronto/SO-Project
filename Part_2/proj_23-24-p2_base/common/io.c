@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
+#include <stdio.h>
 
 int parse_uint(int fd, unsigned int *value, char *next) {
   char buf[16];
@@ -76,4 +78,28 @@ int print_str(int fd, const char *str) {
   }
 
   return 0;
+}
+
+void send_msg (int fd, char const *msg) {
+  size_t len = strlen(msg), written = 0;
+  while (written < len) {
+    ssize_t bytes_written; 
+    if ((bytes_written = write(fd, msg + written, len - written)) < 0) {
+      fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+    written += (size_t)bytes_written;
+  }
+}
+
+void read_msg (int fd, char *buffer) {
+  size_t len = strlen(buffer), already_read = 0;
+  while (already_read < len) {
+    ssize_t bytes_read;
+    if ((bytes_read = read(fd, buffer + already_read, len - already_read)) < 0) {
+      fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+    already_read += (size_t)bytes_read;
+  }
 }

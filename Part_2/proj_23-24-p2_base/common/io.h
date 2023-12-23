@@ -20,4 +20,8 @@ int print_uint(int fd, unsigned int value);
 /// @return 0 if the string was written successfully, 1 otherwise.
 int print_str(int fd, const char *str);
 
+void send_msg (int fd, char const *msg);
+
+void read_msg (int fd, char *buffer);
+
 #endif  // COMMON_IO_H

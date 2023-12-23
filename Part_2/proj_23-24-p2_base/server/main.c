@@ -38,6 +38,7 @@ int main(int argc, char* argv[]) {
   //TODO: Intialize server, create worker threads
   char *pipeServer = argv[1];
   int fd_serv;
+  int session_id = 0;
 
   unlink(pipeServer);
 
@@ -54,6 +55,38 @@ int main(int argc, char* argv[]) {
 
 
   while (1) {
+    char buffer[128];
+    char op_code_str[2];
+    char req_pipe[41];
+    char resp_pipe[41];
+    int fd_req;
+    int fd_resp;
+
+    read_msg(fd_serv, buffer);
+
+    printf("chega aqui\n");
+    switch (buffer[0]) {
+    case '1':
+      sscanf(buffer, "%c %s %s", op_code_str, req_pipe, resp_pipe);
+      if((fd_req = open(req_pipe, O_RDONLY)) < 0) {
+        fprintf(stderr, "Failed to open sender named pipe\n");
+        return 1;
+      }
+
+      if((fd_resp = open(resp_pipe, O_WRONLY)) < 0) {
+        fprintf(stderr, "Failed to open receiver named pipe\n");
+        return 1;
+      }
+
+      session_id++;
+      char session_id_str[2];
+      snprintf(session_id_str, sizeof(session_id_str), "%d", session_id);
+      send_msg(fd_resp, session_id_str);
+      break;
+    
+    default:
+      break;
+    }
     //TODO: Read from pipe
     //TODO: Write new client to the producer-consumer buffer
   }
