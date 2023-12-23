@@ -1,9 +1,39 @@
+#include <errno.h>
 #include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #include "api.h"
+#include "common/constants.h"
+
+void send_msg (int fd, char const *msg) {
+  size_t len = strlen(msg), written = 0;
+  while (written < len) {
+    ssize_t bytes_written; 
+    if ((bytes_written = write(fd, msg + written, len - written)) < 0) {
+      fprintf(stderr, "[ERR]: write failed: %s\n", strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+    written += (size_t)bytes_written;
+  }
+}
+
+void read_msg (int fd, char *buffer) {
+  size_t len = strlen(buffer), already_read = 0;
+  while (already_read < len) {
+    ssize_t bytes_read;
+    if ((bytes_read = read(fd, buffer + already_read, len - already_read)) < 0) {
+      fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+    already_read += (size_t)bytes_read;
+  }
+}
 
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
   //TODO: create pipes and connect to the server
@@ -36,6 +66,10 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
       fprintf(stderr, "Failed to open receiver named pipe\n");
       return 1;
   }
+  char msg[MAX_PIPE_LENGHT * 2 + 2];
+  int op_code = 1;
+  sprintf(msg, "%c%s%s", op_code, req_pipe_path, resp_pipe_path);
+  send_msg(fd_serv, msg);
   
 
 
