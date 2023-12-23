@@ -1,6 +1,11 @@
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "common/constants.h"
 #include "common/io.h"
@@ -31,6 +36,22 @@ int main(int argc, char* argv[]) {
   }
 
   //TODO: Intialize server, create worker threads
+  char *pipeServer = argv[1];
+  int fd_serv;
+
+  unlink(pipeServer);
+
+  if(mkfifo(pipeServer, 0777) < 0) {
+      fprintf(stderr, "Failed to create named pipe\n");
+      return 1;
+  }
+
+  if((fd_serv = open(pipeServer, O_RDONLY)) < 0) {
+    fprintf(stderr, "Failed to open named pipe\n");
+    return 1;
+  }
+  
+
 
   while (1) {
     //TODO: Read from pipe
@@ -38,6 +59,7 @@ int main(int argc, char* argv[]) {
   }
 
   //TODO: Close Server
+  close(fd_serv);
 
   ems_terminate();
 }
