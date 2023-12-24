@@ -12,48 +12,60 @@
 #include "common/constants.h"
 #include "common/io.h"
 
-int session_id;
+long int session_id;
 
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
   //TODO: create pipes and connect to the server
-  int fd_serv = open(server_pipe_path, O_WRONLY);
+  char msg[MAX_PIPE_LENGHT * 2 + 2];
+  char buffer[BUFFER_SIZE];
+  char *endptr;
+  int op_code = 1;
+  int fd_serv, fd_req, fd_resp; 
+  
+  // open server pipe
+  fd_serv = open(server_pipe_path, O_WRONLY);
   if (fd_serv < 0) {
     fprintf(stderr, "Failed to open server named pipe.\n");
     return 1;
   }
 
-  // create req_pipe_path pipe
+  // create req_pipe_path
   unlink(req_pipe_path);
   if(mkfifo(req_pipe_path, 0777) < 0) {
       fprintf(stderr, "Failed to create sender named pipe\n");
       return 1;
   }
-  int fd_req;
-  if((fd_req = open(req_pipe_path, O_WRONLY)) < 0) {
-    fprintf(stderr, "Failed to open sender named pipe\n");
-    return 1;
-  }
 
-  // create resp_pipe_path pipe
+  // create resp_pipe_path 
   unlink(resp_pipe_path);
   if(mkfifo(resp_pipe_path, 0777) < 0) {
       fprintf(stderr, "Failed to create receiver named pipe\n");
       return 1;
   }
-  int fd_resp;
+  
+  sprintf(msg, "%d %s %s", op_code, req_pipe_path, resp_pipe_path);
+  send_msg(fd_serv, msg); //send message to server 
+  
+  // open req_pipe_path to write
+  if((fd_req = open(req_pipe_path, O_WRONLY)) < 0) {
+    fprintf(stderr, "Failed to open sender named pipe\n");
+    return 1;
+  }
+  
+  // open resp_pipe_path to read
   if((fd_resp = open(resp_pipe_path, O_RDONLY)) < 0) {
       fprintf(stderr, "Failed to open receiver named pipe\n");
       return 1;
   }
-  char msg[MAX_PIPE_LENGHT * 2 + 2];
-  char buffer[128];
-  int op_code = 1;
-  sprintf(msg, "%c%s%s", op_code, req_pipe_path, resp_pipe_path);
-  send_msg(fd_serv, msg);
-  read_msg(fd_resp, buffer);
-
-  session_id = atoi(buffer);
-
+  
+  memset(buffer, 0, sizeof(buffer));
+  read_msg(fd_resp, buffer, BUFFER_SIZE);
+  session_id = strtol(buffer, &endptr, 10);
+  if (*endptr != '\0') {
+    fprintf(stderr, "Invalid MAX_PROC value\n");
+    return 1;
+  }
+  
   return 0;
 }
 /*

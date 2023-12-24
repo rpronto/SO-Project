@@ -1,5 +1,7 @@
+#include <stddef.h>
 #ifndef COMMON_IO_H
 #define COMMON_IO_H
+
 
 /// Parses an unsigned integer from the given file descriptor.
 /// @param fd The file descriptor to read from.
@@ -22,6 +24,6 @@ int print_str(int fd, const char *str);
 
 void send_msg (int fd, char const *msg);
 
-void read_msg (int fd, char *buffer);
+void read_msg (int fd, char *buffer, size_t buffer_size);
 
 #endif  // COMMON_IO_H

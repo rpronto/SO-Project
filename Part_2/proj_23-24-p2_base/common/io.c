@@ -92,14 +92,11 @@ void send_msg (int fd, char const *msg) {
   }
 }
 
-void read_msg (int fd, char *buffer) {
-  size_t len = strlen(buffer), already_read = 0;
-  while (already_read < len) {
-    ssize_t bytes_read;
-    if ((bytes_read = read(fd, buffer + already_read, len - already_read)) < 0) {
+void read_msg (int fd, char *buffer, size_t buffer_size) {
+    ssize_t bytes_read = read(fd, buffer, buffer_size - 1);
+    buffer[bytes_read] = 0;
+    if (bytes_read < 0) {
       fprintf(stderr, "[ERR]: read failed: %s\n", strerror(errno));
       exit(EXIT_FAILURE);
     }
-    already_read += (size_t)bytes_read;
-  }
 }
