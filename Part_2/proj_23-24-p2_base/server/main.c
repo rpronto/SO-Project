@@ -12,6 +12,15 @@
 #include "common/io.h"
 #include "operations.h"
 
+int findNextAvailableSessionID (int *session_id_status) {
+  for (int id = 0 ; id < MAX_SESSION_COUNT ; id++) {
+    if (session_id_status[id] == 0)
+      return id;
+  }
+  return -1;
+}
+
+
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
@@ -39,7 +48,9 @@ int main(int argc, char* argv[]) {
   //TODO: Intialize server, create worker threads
   char *pipeServer = argv[1];
   int fd_serv;
+  int session_id_status[MAX_SESSION_COUNT] = {0};
   int session_id_counter = 0;
+  int active_session_id;
   
   unlink(pipeServer);
 
@@ -52,18 +63,17 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "Failed to open named pipe\n");
     return 1;
   }
-  
-  
+
+  char buffer[BUFFER_SIZE];
+  char op_code_str[2];
+  char req_pipe[41];
+  char resp_pipe[41];
+  int fd_req;
+  int fd_resp;
+  memset(buffer, '\0', sizeof(buffer));
+  read_msg(fd_serv, buffer, BUFFER_SIZE);
   
   while (1) {
-    char buffer[BUFFER_SIZE];
-    char op_code_str[2];
-    char req_pipe[41];
-    char resp_pipe[41];
-    int fd_req;
-    int fd_resp;
-    memset(buffer, '\0', sizeof(buffer));
-    read_msg(fd_serv, buffer, BUFFER_SIZE);
     
     switch (buffer[0]) {
     case '1':
@@ -80,23 +90,38 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Failed to open receiver named pipe\n");
             return 1;
           }
-
           char session_id_str[2];
-          snprintf(session_id_str, sizeof(session_id_str), "%d", session_id_counter);
-          send_msg(fd_resp, session_id_str);
-          session_id_counter++;
-          break;
-        } else if (session_id_counter == MAX_SESSION_COUNT -1) {
+          active_session_id = findNextAvailableSessionID(session_id_status);
+          if(active_session_id != -1) {
+            snprintf(session_id_str, sizeof(session_id_str), "%d", active_session_id);
+            send_msg(fd_resp, session_id_str);
+            session_id_status[active_session_id] = 1;
+            session_id_counter++;
+            break;
+          }
+        } else
           continue;
-        }
       }
-      //possivelmente fazer uma struct para associar session_id a req pipe e resp pipe
       break;
+    case '2':
+      session_id_status[active_session_id] = 0;
+      session_id_counter--;
+      break;
+    case '3':
+
+      break;
+    case '4':
+
+      break;
+    case '5':
+
+      break;
+    case '6':
     
-    default:
       break;
     }
     //TODO: Read from pipe
+    read_msg(fd_req, buffer, BUFFER_SIZE);
     //TODO: Write new client to the producer-consumer buffer
   }
 

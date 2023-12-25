@@ -12,7 +12,7 @@
 #include "common/constants.h"
 #include "common/io.h"
 
-long int session_id;
+sessionID session_ID;
 
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
   //TODO: create pipes and connect to the server
@@ -60,24 +60,42 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   
   memset(buffer, 0, sizeof(buffer));
   read_msg(fd_resp, buffer, BUFFER_SIZE);
-  session_id = strtol(buffer, &endptr, 10);
+  session_ID.session_id = strtol(buffer, &endptr, 10);
   if (*endptr != '\0') {
-    fprintf(stderr, "Invalid MAX_PROC value\n");
+    fprintf(stderr, "Invalid sessionID value\n");
     return 1;
   }
+  session_ID.fd_serv = fd_serv;
+  session_ID.fd_req = fd_req;
+  session_ID.fd_resp = fd_resp;
+  strcpy(session_ID.req_pipe_path, req_pipe_path);
+  strcpy(session_ID.resp_pipe_path, resp_pipe_path);
+  session_ID.status = 1;
   
   return 0;
 }
-/*
+
 int ems_quit(void) { 
-  //TODO: close pipes
+  char msg[2];
+  msg[1] = '2';
+  send_msg(session_ID.fd_req, msg);
+  if (close(session_ID.fd_req) < 0) {
+    fprintf(stderr, "Failed to close fd_req\n");
+    return 1;
+  }
+  if (close(session_ID.fd_resp) < 0) {
+    fprintf(stderr, "Failed to close fd_req\n");
+    return 1;
+  }
+  return 0;
+}
+/*
+int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
+  //TODO: send create request to the server (through the request pipe) and wait for the response (through the response pipe)
+  
   return 1;
 }
 
-int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
-  //TODO: send create request to the server (through the request pipe) and wait for the response (through the response pipe)
-  return 1;
-}
 
 int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys) {
   //TODO: send reserve request to the server (through the request pipe) and wait for the response (through the response pipe)
