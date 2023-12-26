@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "Failed to open output file. Path: %s\n", out_path);
     return 1;
   }
-/*
+
   while (1) {
     unsigned int event_id;
     size_t num_rows, num_columns, num_coords;
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
 
         if (ems_create(event_id, num_rows, num_columns)) fprintf(stderr, "Failed to create event\n");
         break;
-
+      
       case CMD_RESERVE:
         num_coords = parse_reserve(in_fd, MAX_RESERVATION_SIZE, &event_id, xs, ys);
 
@@ -72,18 +72,18 @@ int main(int argc, char* argv[]) {
         break;
 
       case CMD_SHOW:
-        if (parse_show(in_fd, &event_id) != 0) {
+        /*if (parse_show(in_fd, &event_id) != 0) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
 
         if (ems_show(out_fd, event_id)) fprintf(stderr, "Failed to show event\n");
-        break;
+        break;*/
 
       case CMD_LIST_EVENTS:
-        if (ems_list_events(out_fd)) fprintf(stderr, "Failed to list events\n");
+       /* if (ems_list_events(out_fd)) fprintf(stderr, "Failed to list events\n");
         break;
-
+      */
       case CMD_WAIT:
         if (parse_wait(in_fd, &delay, NULL) == -1) {
             fprintf(stderr, "Invalid command. See HELP for usage\n");
@@ -121,5 +121,5 @@ int main(int argc, char* argv[]) {
         ems_quit();
         return 0;
     }
-  }*/
+  }
 }

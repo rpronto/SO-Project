@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
   read_msg(fd_serv, buffer, BUFFER_SIZE);
   
   while (1) {
-    
+    unsigned int event_id = 0;
     switch (buffer[0]) {
     case '1':
       while(1) {
@@ -108,7 +108,6 @@ int main(int argc, char* argv[]) {
       session_id_counter--;
       break;
     case '3':
-      unsigned int event_id = 0;
       size_t num_rows = 0;
       size_t num_col = 0;
       int ret;
@@ -119,14 +118,25 @@ int main(int argc, char* argv[]) {
       send_msg(fd_resp,ret_str);
       break;
     case '4':
-
+      size_t num_seats = 0;
+      size_t xs[num_seats];
+      size_t ys[num_seats];
+      sscanf(buffer, "%c %u %ld", op_code_str, &event_id, &num_seats);
+      for (size_t i = 0; i < num_seats; ++i) {
+        sscanf(buffer + strlen(buffer), "%ld %ld", &xs[i], &ys[i]);
+      }
+      
+      printf("%s\n%ln\n", buffer, xs);
+      ret = ems_reserve(event_id, num_seats, xs, ys);
+      snprintf(ret_str, sizeof(ret), "%d", ret);
+      send_msg(fd_resp,ret_str);
       break;
-    case '5':
+    /*case '5':
 
       break;
     case '6':
     
-      break;
+      break;*/
     }
     //TODO: Read from pipe
     memset(buffer, '\0', sizeof(buffer));
