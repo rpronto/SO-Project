@@ -108,7 +108,15 @@ int main(int argc, char* argv[]) {
       session_id_counter--;
       break;
     case '3':
-
+      unsigned int event_id = 0;
+      size_t num_rows = 0;
+      size_t num_col = 0;
+      int ret;
+      char ret_str[2];
+      sscanf(buffer, "%c %u %ld %ld", op_code_str, &event_id, &num_rows, &num_col);
+      ret = ems_create(event_id, num_rows, num_col);
+      snprintf(ret_str, sizeof(ret), "%d", ret);
+      send_msg(fd_resp,ret_str);
       break;
     case '4':
 
@@ -121,6 +129,7 @@ int main(int argc, char* argv[]) {
       break;
     }
     //TODO: Read from pipe
+    memset(buffer, '\0', sizeof(buffer));
     read_msg(fd_req, buffer, BUFFER_SIZE);
     //TODO: Write new client to the producer-consumer buffer
   }
