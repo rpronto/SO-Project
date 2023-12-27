@@ -72,13 +72,13 @@ int main(int argc, char* argv[]) {
         break;
 
       case CMD_SHOW:
-        /*if (parse_show(in_fd, &event_id) != 0) {
+        if (parse_show(in_fd, &event_id) != 0) {
           fprintf(stderr, "Invalid command. See HELP for usage\n");
           continue;
         }
 
         if (ems_show(out_fd, event_id)) fprintf(stderr, "Failed to show event\n");
-        break;*/
+        break;
 
       case CMD_LIST_EVENTS:
        /* if (ems_list_events(out_fd)) fprintf(stderr, "Failed to list events\n");

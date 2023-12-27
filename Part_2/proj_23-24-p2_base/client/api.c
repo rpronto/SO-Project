@@ -115,7 +115,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   char msg[BUFFER_SIZE + (num_seats * 2)];
   memset(msg, '\0', sizeof(msg));
   sprintf(msg, "%d %u %zu", op_code, event_id, num_seats);
-
+  
 
   size_t i;
   for (i = 0; i < num_seats; ++i) {
@@ -132,12 +132,27 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   return 0;
 }
 
-/*
+
 int ems_show(int out_fd, unsigned int event_id) {
   //TODO: send show request to the server (through the request pipe) and wait for the response (through the response pipe)
-  return 1;
+  int op_code = 5, ret;
+  size_t num_rows = 0, num_cols = 0;
+  char msg[BUFFER_SIZE];
+  memset(msg, '\0', sizeof(msg));
+  sprintf(msg, "%d %u", op_code, event_id);
+  send_msg(session_ID.fd_req, msg);
+  memset(msg, '\0', sizeof(msg));
+  while (msg[0] == '\0')
+    read_msg(session_ID.fd_resp, msg, sizeof(msg));
+  sscanf(msg, "%d %lu %lu", &ret, &num_rows, &num_cols);
+  char out[num_rows * num_cols];
+  //falta escrever no output
+  if (ret != 0)
+    return 1;
+  return 0;
 }
 
+/*
 int ems_list_events(int out_fd) {
   //TODO: send list request to the server (through the request pipe) and wait for the response (through the response pipe)
   return 1;

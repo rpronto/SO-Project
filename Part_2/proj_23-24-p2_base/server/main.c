@@ -74,7 +74,11 @@ int main(int argc, char* argv[]) {
   read_msg(fd_serv, buffer, BUFFER_SIZE);
   
   while (1) {
+    size_t num_seats = 0;
     unsigned int event_id = 0;
+    size_t xs[num_seats];
+    size_t ys[num_seats];
+
     switch (buffer[0]) {
     case '1':
       while(1) {
@@ -118,25 +122,39 @@ int main(int argc, char* argv[]) {
       send_msg(fd_resp,ret_str);
       break;
     case '4':
-      size_t num_seats = 0;
-      size_t xs[num_seats];
-      size_t ys[num_seats];
-      sscanf(buffer, "%c %u %ld", op_code_str, &event_id, &num_seats);
-      for (size_t i = 0; i < num_seats; ++i) {
-        sscanf(buffer + strlen(buffer), "%ld %ld", &xs[i], &ys[i]);
-      }
+      int elements_already_read = 0;
+      int i = 0;
+      const char *ptr = buffer;
+
+      sscanf(buffer, "%c %u %ld%n", op_code_str, &event_id, &num_seats, &elements_already_read);
+      ptr += elements_already_read;
       
-      printf("%s\n%ln\n", buffer, xs);
+      while (sscanf(ptr, "%zu", &xs[i]) == 1) {
+        ptr = strchr(ptr, ' ');
+        if(ptr == NULL)
+          break;
+        ptr++;
+
+        sscanf(ptr, "%zu", &ys[i]);
+
+        ptr = strchr(ptr, ' ');
+        if(ptr == NULL)
+          break;
+        ptr++;
+        i++;
+      }
+
       ret = ems_reserve(event_id, num_seats, xs, ys);
       snprintf(ret_str, sizeof(ret), "%d", ret);
       send_msg(fd_resp,ret_str);
       break;
-    /*case '5':
-
+    case '5':
+      sscanf(buffer, "%c %u", op_code_str, &event_id);
+      ret = ems_show(fd_resp, event_id);
+      if(ret == 1) {
+        send_msg(fd_resp, "1");
+      }
       break;
-    case '6':
-    
-      break;*/
     }
     //TODO: Read from pipe
     memset(buffer, '\0', sizeof(buffer));
