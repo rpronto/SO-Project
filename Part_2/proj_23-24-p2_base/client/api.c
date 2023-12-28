@@ -144,9 +144,11 @@ int ems_show(int out_fd, unsigned int event_id) {
   memset(msg, '\0', sizeof(msg));
   while (msg[0] == '\0')
     read_msg(session_ID.fd_resp, msg, sizeof(msg));
+  send_msg(out_fd, msg);
   sscanf(msg, "%d %lu %lu", &ret, &num_rows, &num_cols);
   char out[num_rows * num_cols];
-  //falta escrever no output
+  
+  
   if (ret != 0)
     return 1;
   return 0;

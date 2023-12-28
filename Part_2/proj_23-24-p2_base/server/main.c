@@ -78,7 +78,8 @@ int main(int argc, char* argv[]) {
     unsigned int event_id = 0;
     size_t xs[num_seats];
     size_t ys[num_seats];
-
+    size_t rows;
+    size_t cols;
     switch (buffer[0]) {
     case '1':
       while(1) {
@@ -117,43 +118,57 @@ int main(int argc, char* argv[]) {
       int ret;
       char ret_str[2];
       sscanf(buffer, "%c %u %ld %ld", op_code_str, &event_id, &num_rows, &num_col);
+      rows = num_rows;
+      cols = num_col;
       ret = ems_create(event_id, num_rows, num_col);
       snprintf(ret_str, sizeof(ret), "%d", ret);
-      send_msg(fd_resp,ret_str);
+      send_msg(fd_resp, ret_str);
       break;
     case '4':
       int elements_already_read = 0;
       int i = 0;
       const char *ptr = buffer;
-
       sscanf(buffer, "%c %u %ld%n", op_code_str, &event_id, &num_seats, &elements_already_read);
       ptr += elements_already_read;
-      
       while (sscanf(ptr, "%zu", &xs[i]) == 1) {
         ptr = strchr(ptr, ' ');
         if(ptr == NULL)
           break;
         ptr++;
-
         sscanf(ptr, "%zu", &ys[i]);
-
         ptr = strchr(ptr, ' ');
         if(ptr == NULL)
           break;
         ptr++;
         i++;
       }
-
       ret = ems_reserve(event_id, num_seats, xs, ys);
       snprintf(ret_str, sizeof(ret), "%d", ret);
-      send_msg(fd_resp,ret_str);
+      send_msg(fd_resp, ret_str);
       break;
     case '5':
+      char msg[BUFFER_SIZE + (rows * cols)];
+      const char *msg_ptr = msg;
+      memset(msg, '\0', sizeof(msg));
       sscanf(buffer, "%c %u", op_code_str, &event_id);
-      ret = ems_show(fd_resp, event_id);
+      const char *aux_file = "aux_file.txt";
+      int fd_aux = open(aux_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
+      if (fd_aux < 0) {
+        fprintf(stderr, "Failed open aux file\n");
+        return 1;
+      }
+      ret = ems_show(fd_aux, event_id);
       if(ret == 1) {
         send_msg(fd_resp, "1");
+        break;
       }
+      sprintf(msg, "%d %zu %zu\n", ret, rows, cols);
+      msg_ptr += strlen(msg);
+      lseek(fd_aux, 0, SEEK_SET);
+      
+      read(fd_aux, msg + strlen(msg), sizeof(msg)); //provavelmente nao é esta a forma de passar a informação
+      send_msg(fd_resp, msg);
+      
       break;
     }
     //TODO: Read from pipe
@@ -161,7 +176,7 @@ int main(int argc, char* argv[]) {
     read_msg(fd_req, buffer, BUFFER_SIZE);
     //TODO: Write new client to the producer-consumer buffer
   }
-
+  
   //TODO: Close Server
   close(fd_serv);
 
