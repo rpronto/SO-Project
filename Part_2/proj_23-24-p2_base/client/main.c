@@ -81,9 +81,9 @@ int main(int argc, char* argv[]) {
         break;
 
       case CMD_LIST_EVENTS:
-       /* if (ems_list_events(out_fd)) fprintf(stderr, "Failed to list events\n");
+        if (ems_list_events(out_fd)) fprintf(stderr, "Failed to list events\n");
         break;
-      */
+      
       case CMD_WAIT:
         if (parse_wait(in_fd, &delay, NULL) == -1) {
             fprintf(stderr, "Invalid command. See HELP for usage\n");

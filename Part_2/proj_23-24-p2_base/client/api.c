@@ -147,7 +147,7 @@ int ems_show(int out_fd, unsigned int event_id) {
     read_msg(session_ID.fd_resp, msg, sizeof(msg));
   sscanf(msg, "%d %lu %lu%n", &ret, &num_rows, &num_cols, &num_chars_read);
   char out[2 * num_rows * num_cols];
-  memcpy(out, msg + num_chars_read, sizeof(out));
+  memcpy(out, msg + num_chars_read + 1, sizeof(out)); // +1 para evitar o '\n' que vem na mensagem do server
   write(out_fd, out, sizeof(out));
 
   if (ret != 0)
@@ -155,9 +155,21 @@ int ems_show(int out_fd, unsigned int event_id) {
   return 0;
 }
 
-/*
+
 int ems_list_events(int out_fd) {
   //TODO: send list request to the server (through the request pipe) and wait for the response (through the response pipe)
+  int op_code = 6, ret;
+  int num_chars_read = 0;
+  size_t num_events = 0;
+  char msg[BUFFER_SIZE];
+  memset(msg, '\0', sizeof(msg));
+  sprintf(msg, "%d", op_code);
+  send_msg(session_ID.fd_req, msg);
+  memset(msg, '\0', sizeof(msg));
+  while (msg[0] == '\0')
+    read_msg(session_ID.fd_resp, msg, sizeof(msg));
+  sscanf(msg, "%d %lu%n", &ret, &num_events, &num_chars_read);
+  //falta terminar o resto deste comando
+  printf("%d\n", out_fd); //isto é só para nao dar warning a compilar
   return 1;
 }
-*/
