@@ -147,7 +147,7 @@ int main(int argc, char* argv[]) {
       send_msg(fd_resp, ret_str);
       break;
     case '5':
-      char msg[BUFFER_SIZE + (rows * cols)];
+      char msg[2 * rows * cols + 100];
       const char *msg_ptr = msg;
       memset(msg, '\0', sizeof(msg));
       sscanf(buffer, "%c %u", op_code_str, &event_id);
@@ -168,6 +168,9 @@ int main(int argc, char* argv[]) {
       
       read(fd_aux, msg + strlen(msg), sizeof(msg)); //provavelmente nao é esta a forma de passar a informação
       send_msg(fd_resp, msg);
+
+      close(fd_aux);
+      unlink(aux_file);
       
       break;
     }

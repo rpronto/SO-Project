@@ -138,17 +138,18 @@ int ems_show(int out_fd, unsigned int event_id) {
   int op_code = 5, ret;
   size_t num_rows = 0, num_cols = 0;
   char msg[BUFFER_SIZE];
+  int num_chars_read = 0;
   memset(msg, '\0', sizeof(msg));
   sprintf(msg, "%d %u", op_code, event_id);
   send_msg(session_ID.fd_req, msg);
   memset(msg, '\0', sizeof(msg));
   while (msg[0] == '\0')
     read_msg(session_ID.fd_resp, msg, sizeof(msg));
-  send_msg(out_fd, msg);
-  sscanf(msg, "%d %lu %lu", &ret, &num_rows, &num_cols);
-  char out[num_rows * num_cols];
-  
-  
+  sscanf(msg, "%d %lu %lu%n", &ret, &num_rows, &num_cols, &num_chars_read);
+  char out[2 * num_rows * num_cols];
+  memcpy(out, msg + num_chars_read, sizeof(out));
+  write(out_fd, out, sizeof(out));
+
   if (ret != 0)
     return 1;
   return 0;
