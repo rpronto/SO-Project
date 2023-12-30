@@ -3,6 +3,14 @@
 
 #include <stddef.h>
 
+typedef struct {
+    long int session_id;
+    char req_pipe_path[41];
+    char resp_pipe_path[41];
+    int fd_serv, fd_req, fd_resp;
+    int status;
+} sessionID;
+
 /// Connects to an EMS server.
 /// @param req_pipe_path Path to the name pipe to be created for requests.
 /// @param resp_pipe_path Path to the name pipe to be created for responses.
