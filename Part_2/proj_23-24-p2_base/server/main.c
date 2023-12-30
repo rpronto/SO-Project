@@ -47,6 +47,9 @@ void *threadFunction(void *args) {
       continue;
     fd_req = (*producer_consumer)->fd_req;
     fd_resp = (*producer_consumer)->fd_resp;
+    request *aux = *producer_consumer;
+    *producer_consumer = (*producer_consumer)->next;
+    free(aux);
     session_id_status[session_id] = 1;
     sprintf(id_str, "%d", session_id);
     send_msg(fd_resp, id_str);
@@ -245,8 +248,13 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  for (int i = 0; i < MAX_SESSION_COUNT; i++) {
+    args[i].session_id_status = session_id_status;
+    args[i].producer_consumer = &producer_consumer;
+    pthread_create(&threads[i], NULL, threadFunction, (void *)&args[i]);
+  }
+
   while(1){
-    int id = -1;
     memset(buffer, '\0', sizeof(buffer));
     read_msg(fd_serv, buffer, BUFFER_SIZE);
     if (buffer[0] == '1') {
