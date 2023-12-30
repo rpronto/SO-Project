@@ -35,6 +35,9 @@ void *threadFunction(void *args) {
   int fd_resp = thread_args->fd_resp;
   char buffer[BUFFER_SIZE];  
   char op_code_str[2];
+  char id_str[2];
+  sprintf(id_str, "%d", session_id);
+  send_msg(fd_resp, id_str);
   memset(buffer, '\0', sizeof(buffer));
   read_msg(fd_req, buffer, BUFFER_SIZE);
   while (1) {
