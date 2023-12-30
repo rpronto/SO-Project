@@ -158,8 +158,7 @@ int ems_show(int out_fd, unsigned int event_id) {
 
 int ems_list_events(int out_fd) {
   //TODO: send list request to the server (through the request pipe) and wait for the response (through the response pipe)
-  int op_code = 6, ret;
-  int num_chars_read = 0;
+  int op_code = 6, ret = 0, num_chars_read = 0;;
   size_t num_events = 0;
   char msg[BUFFER_SIZE];
   memset(msg, '\0', sizeof(msg));
@@ -169,7 +168,22 @@ int ems_list_events(int out_fd) {
   while (msg[0] == '\0')
     read_msg(session_ID.fd_resp, msg, sizeof(msg));
   sscanf(msg, "%d %lu%n", &ret, &num_events, &num_chars_read);
-  //falta terminar o resto deste comando
-  printf("%d\n", out_fd); //isto é só para nao dar warning a compilar
-  return 1;
+  if (ret != 0)
+    return 1;
+  if (num_events == 0) {
+    const char *no_events = "No events\n";
+    write(out_fd, no_events, strlen(no_events));
+    return 0;
+  }
+  const char *ptr = msg;
+  ptr += num_chars_read;
+  unsigned int ids[num_events];
+  char out[BUFFER_SIZE];
+  for (size_t i = 0; i < num_events; i++) {
+    sscanf(ptr, "%d%n", &ids[i], &num_chars_read);
+    snprintf(out, sizeof(out), "Event: %d\n", ids[i]);
+    write(out_fd, out, strlen(out));
+    ptr += num_chars_read;
+  }
+  return 0;
 }

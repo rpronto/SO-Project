@@ -113,7 +113,10 @@ int main(int argc, char* argv[]) {
       case '2':
         session_id_status[active_session_id] = 0;
         session_id_counter--;
-        break;
+        memset(buffer, '\0', sizeof(buffer));
+        while (buffer[0] == '\0')
+          read_msg(fd_serv, buffer, BUFFER_SIZE);
+        continue;
       case '3':
         size_t num_rows = 0;
         size_t num_col = 0;
@@ -161,11 +164,15 @@ int main(int argc, char* argv[]) {
         if (fd_aux < 0) {
           fprintf(stderr, "Failed open aux file\n");
           free(msg);
+          close(fd_aux);
+          unlink(aux_file);
           return 1;
         }
         ret = ems_show(fd_aux, event_id);
         if(ret == 1) {
           send_msg(fd_resp, "1");
+          close(fd_aux);
+          unlink(aux_file);
           free(msg);
           break;
         }
@@ -184,17 +191,56 @@ int main(int argc, char* argv[]) {
           fprintf(stderr, "Failed open aux file\n");
           return 1;
         }
+
         ret = ems_list_events(fd_aux);
         if(ret == 1) {
           send_msg(fd_resp, "1");
+          close(fd_aux);
+          unlink(aux_file);
           break;
         }
-        //falta terminar o resto deste comando
+        unsigned int *ids = NULL;
+        char aux_buffer[BUFFER_SIZE];
+        size_t num_events = 0;
+        const char *aux_ptr = aux_buffer;
+
+        lseek(fd_aux, 0, SEEK_SET);
+        memset(aux_buffer, '\0', sizeof(aux_buffer));
+        read_msg(fd_aux, aux_buffer, BUFFER_SIZE);
+        
+        while(1) {
+          if (sscanf(aux_ptr, "Event: %d", &event_id) == 1) {
+            num_events++;
+            ids = realloc(ids, num_events * sizeof(unsigned int));
+            if (ids == NULL) {
+              fprintf(stderr, "Failed to realloc ids array\n");
+              close(fd_aux);
+              unlink(aux_file);
+              free(ids);
+              return 1;
+            }
+            ids[num_events - 1] = event_id;
+          }
+          aux_ptr = strchr(aux_ptr, '\n');
+          if (aux_ptr == NULL)
+            break;
+          aux_ptr++;
+        }
+        
+        char *list_events_msg = (char *)malloc(sizeof(ret) + sizeof(num_events) + (num_events * sizeof(unsigned int)) + 2);
+        sprintf(list_events_msg, "%d %zu", ret, num_events);
+        for (size_t j = 0; j < num_events; ++j) 
+          sprintf(list_events_msg + strlen(list_events_msg), " %u", ids[j]);
+        send_msg(fd_resp, list_events_msg);
+        close(fd_aux);
+        unlink(aux_file);
+        free(ids);
+        free(list_events_msg);
+        break;
     }
     //TODO: Read from pipe
     memset(buffer, '\0', sizeof(buffer));
     read_msg(fd_req, buffer, BUFFER_SIZE);
-    
     //TODO: Write new client to the producer-consumer buffer
   }
   
