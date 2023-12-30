@@ -7,10 +7,17 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "common/constants.h"
 #include "common/io.h"
 #include "operations.h"
+
+typedef struct threadArgs {
+  int *session_id_status;
+  int session_id, fd_req, fd_resp;
+} threadArgs;
+
 
 int findNextAvailableSessionID (int *session_id_status) {
   for (int id = 0 ; id < MAX_SESSION_COUNT ; id++) {
@@ -20,59 +27,16 @@ int findNextAvailableSessionID (int *session_id_status) {
   return -1;
 }
 
-
-int main(int argc, char* argv[]) {
-  if (argc < 2 || argc > 3) {
-    fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
-    return 1;
-  }
-
-  char* endptr;
-  unsigned int state_access_delay_us = STATE_ACCESS_DELAY_US;
-  if (argc == 3) {
-    unsigned long int delay = strtoul(argv[2], &endptr, 10);
-
-    if (*endptr != '\0' || delay > UINT_MAX) {
-      fprintf(stderr, "Invalid delay value or value too large\n");
-      return 1;
-    }
-
-    state_access_delay_us = (unsigned int)delay;
-  }
-
-  if (ems_init(state_access_delay_us)) {
-    fprintf(stderr, "Failed to initialize EMS\n");
-    return 1;
-  }
-
-  //TODO: Intialize server, create worker threads
-  char *pipeServer = argv[1];
-  int fd_serv;
-  int session_id_status[MAX_SESSION_COUNT] = {0};
-  int session_id_counter = 0;
-  int active_session_id;
-  
-  unlink(pipeServer);
-
-  if(mkfifo(pipeServer, 0777) < 0) {
-      fprintf(stderr, "Failed to create named pipe\n");
-      return 1;
-  }
-  
-  if((fd_serv = open(pipeServer, O_RDONLY)) < 0) {
-    fprintf(stderr, "Failed to open named pipe\n");
-    return 1;
-  }
-
-  char buffer[BUFFER_SIZE];
+void *threadFunction(void *args) {
+  threadArgs *thread_args = (threadArgs *)args;
+  int *session_id_status = thread_args->session_id_status;
+  int session_id = thread_args->session_id;
+  int fd_req = thread_args->fd_req;
+  int fd_resp = thread_args->fd_resp;
+  char buffer[BUFFER_SIZE];  
   char op_code_str[2];
-  char req_pipe[41];
-  char resp_pipe[41];
-  int fd_req;
-  int fd_resp;
   memset(buffer, '\0', sizeof(buffer));
-  read_msg(fd_serv, buffer, BUFFER_SIZE);
-  
+  read_msg(fd_req, buffer, BUFFER_SIZE);
   while (1) {
     int ret, fd_aux;
     size_t num_seats = 0;
@@ -83,40 +47,9 @@ int main(int argc, char* argv[]) {
     size_t cols;
     const char *aux_file = "aux_file.txt";
     switch (buffer[0]) {
-      case '1':
-        while(1) {
-          if (session_id_counter < MAX_SESSION_COUNT) {
-            sscanf(buffer, "%c %s %s", op_code_str, req_pipe, resp_pipe);
-
-            if((fd_req = open(req_pipe, O_RDONLY)) < 0) {
-              fprintf(stderr, "Failed to open sender named pipe\n");
-              return 1;
-            }
-
-            if((fd_resp = open(resp_pipe, O_WRONLY)) < 0) {
-              fprintf(stderr, "Failed to open receiver named pipe\n");
-              return 1;
-            }
-            char session_id_str[2];
-            active_session_id = findNextAvailableSessionID(session_id_status);
-            if(active_session_id != -1) {
-              snprintf(session_id_str, sizeof(session_id_str), "%d", active_session_id);
-              send_msg(fd_resp, session_id_str);
-              session_id_status[active_session_id] = 1;
-              session_id_counter++;
-              break;
-            }
-          } else
-            continue;
-        }
-        break;
       case '2':
-        session_id_status[active_session_id] = 0;
-        session_id_counter--;
-        memset(buffer, '\0', sizeof(buffer));
-        while (buffer[0] == '\0')
-          read_msg(fd_serv, buffer, BUFFER_SIZE);
-        continue;
+        session_id_status[session_id] = 0;
+        pthread_exit(NULL);
       case '3':
         size_t num_rows = 0;
         size_t num_col = 0;
@@ -155,7 +88,7 @@ int main(int argc, char* argv[]) {
         char *msg = (char *)malloc(num_elements);
         if (msg == NULL) {
             fprintf(stderr, "Failed to allocate memory for msg\n");
-            return 1;
+            exit(1);
         }
         const char *msg_ptr = msg;
         memset(msg, 0, num_elements);
@@ -166,7 +99,7 @@ int main(int argc, char* argv[]) {
           free(msg);
           close(fd_aux);
           unlink(aux_file);
-          return 1;
+          exit(1);
         }
         ret = ems_show(fd_aux, event_id);
         if(ret == 1) {
@@ -189,7 +122,7 @@ int main(int argc, char* argv[]) {
         fd_aux = open(aux_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (fd_aux < 0) {
           fprintf(stderr, "Failed open aux file\n");
-          return 1;
+          exit(1);
         }
 
         ret = ems_list_events(fd_aux);
@@ -217,7 +150,7 @@ int main(int argc, char* argv[]) {
               close(fd_aux);
               unlink(aux_file);
               free(ids);
-              return 1;
+              exit(1);
             }
             ids[num_events - 1] = event_id;
           }
@@ -243,7 +176,83 @@ int main(int argc, char* argv[]) {
     read_msg(fd_req, buffer, BUFFER_SIZE);
     //TODO: Write new client to the producer-consumer buffer
   }
+}
+
+
+int main(int argc, char* argv[]) {
+  if (argc < 2 || argc > 3) {
+    fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
+    return 1;
+  }
+
+  char* endptr;
+  unsigned int state_access_delay_us = STATE_ACCESS_DELAY_US;
+  if (argc == 3) {
+    unsigned long int delay = strtoul(argv[2], &endptr, 10);
+
+    if (*endptr != '\0' || delay > UINT_MAX) {
+      fprintf(stderr, "Invalid delay value or value too large\n");
+      return 1;
+    }
+
+    state_access_delay_us = (unsigned int)delay;
+  }
+
+  if (ems_init(state_access_delay_us)) {
+    fprintf(stderr, "Failed to initialize EMS\n");
+    return 1;
+  }
+
+  //TODO: Intialize server, create worker threads
+  char *pipeServer = argv[1];
+  int fd_serv;
+  int session_id_status[MAX_SESSION_COUNT] = {0};
+  pthread_t threads[MAX_SESSION_COUNT];
+  threadArgs args[MAX_SESSION_COUNT]; 
+  char buffer[BUFFER_SIZE];
+  char op_code_str[2];
+  char req_pipe[41];
+  char resp_pipe[41];
+  int fd_req;
+  int fd_resp;
   
+  unlink(pipeServer);
+
+  if(mkfifo(pipeServer, 0777) < 0) {
+      fprintf(stderr, "Failed to create named pipe\n");
+      return 1;
+  }
+  
+  if((fd_serv = open(pipeServer, O_RDONLY)) < 0) {
+    fprintf(stderr, "Failed to open named pipe\n");
+    return 1;
+  }
+
+  while(1){
+    int id = -1;
+    memset(buffer, '\0', sizeof(buffer));
+    read_msg(fd_serv, buffer, BUFFER_SIZE);
+    if (buffer[0] == '1') {
+      while((id = findNextAvailableSessionID(session_id_status)) == -1)
+        continue;
+      sscanf(buffer, "%c %s %s", op_code_str, req_pipe, resp_pipe);
+      if((fd_req = open(req_pipe, O_RDONLY)) < 0) {
+        fprintf(stderr, "Failed to open sender named pipe\n");
+        return 1;
+      }
+
+      if((fd_resp = open(resp_pipe, O_WRONLY)) < 0) {
+        fprintf(stderr, "Failed to open receiver named pipe\n");
+        return 1;
+      }
+      args[id].session_id_status = session_id_status;
+      args[id].session_id = id;
+      args[id].fd_req = fd_req;
+      args[id].fd_resp = fd_resp;
+      pthread_create(&threads[id], NULL, threadFunction, (void *)&args[id]);
+    }
+  }
+ 
   //TODO: Close Server
   close(fd_serv);
 
