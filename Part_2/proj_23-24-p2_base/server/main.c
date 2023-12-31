@@ -65,6 +65,9 @@ void *threadFunction(void *args) {
       switch (buffer[0]) {
         case '2':
           session_id_status[session_id] = 0;
+          memset(buffer, '\0', sizeof(buffer));
+          close(fd_req);
+          close(fd_resp);
           break;
         case '3':
           size_t num_rows = 0;
@@ -258,6 +261,9 @@ int main(int argc, char* argv[]) {
     memset(buffer, '\0', sizeof(buffer));
     read_msg(fd_serv, buffer, BUFFER_SIZE);
     if (buffer[0] == '1') {
+      memset(op_code_str, '\0', sizeof(op_code_str));
+      memset(req_pipe, '\0', sizeof(req_pipe));
+      memset(resp_pipe, '\0', sizeof(resp_pipe));
       sscanf(buffer, "%c %s %s", op_code_str, req_pipe, resp_pipe);
       if((fd_req = open(req_pipe, O_RDONLY)) < 0) {
         fprintf(stderr, "Failed to open sender named pipe\n");
