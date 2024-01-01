@@ -13,6 +13,9 @@
 #include "common/io.h"
 #include "operations.h"
 
+pthread_mutex_t mutex;
+pthread_cond_t cond;
+int buffer_counter = 0;
 
 typedef struct request {
   int fd_req, fd_resp;
@@ -20,37 +23,32 @@ typedef struct request {
 } request;
 
 typedef struct threadArgs {
-  int *session_id_status;
+  int session_id;
   request **producer_consumer;
 } threadArgs;
 
-
-int findNextAvailableSessionID (int *session_id_status) {
-  for (int id = 0 ; id < MAX_SESSION_COUNT ; id++) {
-    if (session_id_status[id] == 0)
-      return id;
-  }
-  return -1;
-}
-
 void *threadFunction(void *args) {
+  pthread_mutex_lock(&mutex);
   threadArgs *thread_args = (threadArgs *)args;
-  int *session_id_status = thread_args->session_id_status;
+  int session_id = thread_args->session_id;
   request **producer_consumer = thread_args->producer_consumer;
-  int fd_req, fd_resp, session_id;
+  int fd_req, fd_resp;
   char buffer[BUFFER_SIZE];  
   memset(buffer, '\0', sizeof(buffer));
   char op_code_str[2];
   char id_str[2];
-  while(1){
-    while(*producer_consumer == NULL || (session_id = findNextAvailableSessionID(session_id_status)) == -1)
-      continue;
+  int quit = 0;
+  while(1) {
+    while(buffer_counter == 0) {
+      pthread_cond_wait(&cond, &mutex);
+    }
     fd_req = (*producer_consumer)->fd_req;
     fd_resp = (*producer_consumer)->fd_resp;
     request *aux = *producer_consumer;
     *producer_consumer = (*producer_consumer)->next;
     free(aux);
-    session_id_status[session_id] = 1;
+    buffer_counter--;
+    pthread_cond_signal(&cond);
     sprintf(id_str, "%d", session_id);
     send_msg(fd_resp, id_str);
     while (1) {
@@ -64,7 +62,7 @@ void *threadFunction(void *args) {
       const char *aux_file = "aux_file.txt"; //FIXME ***isto precisa de ser alterado -> cada thread tem de ter o seu ficheiro auxiliar***
       switch (buffer[0]) {
         case '2':
-          session_id_status[session_id] = 0;
+          quit = 1;
           memset(buffer, '\0', sizeof(buffer));
           close(fd_req);
           close(fd_resp);
@@ -190,14 +188,16 @@ void *threadFunction(void *args) {
           free(list_events_msg);
           break;
       }
-      //TODO: Read from pipe
-      if (session_id_status[session_id] == 0)
+      if (quit == 1){
+        quit = 0;
         break;
+      }
+      //TODO: Read from pipe
       memset(buffer, '\0', sizeof(buffer));
       read_msg(fd_req, buffer, BUFFER_SIZE);
-      //TODO: Write new client to the producer_consumer buffer
     }
   }
+  pthread_mutex_unlock(&mutex);
 }
 
 
@@ -226,10 +226,11 @@ int main(int argc, char* argv[]) {
   }
 
   //TODO: Intialize server, create worker threads
+  pthread_mutex_init(&mutex, NULL);
+  pthread_cond_init(&cond, NULL);
   char *pipeServer = argv[1];
   request *producer_consumer = NULL;
   int fd_serv;
-  int session_id_status[MAX_SESSION_COUNT] = {0};
   pthread_t threads[MAX_SESSION_COUNT];
   threadArgs args[MAX_SESSION_COUNT]; 
   char buffer[BUFFER_SIZE];
@@ -252,11 +253,15 @@ int main(int argc, char* argv[]) {
   }
 
   for (int i = 0; i < MAX_SESSION_COUNT; i++) {
-    args[i].session_id_status = session_id_status;
+    args[i].session_id = i;
     args[i].producer_consumer = &producer_consumer;
-    pthread_create(&threads[i], NULL, threadFunction, (void *)&args[i]);
+    if (pthread_create(&threads[i], NULL, threadFunction, (void *)&args[i]) != 0) {
+      fprintf(stderr, "Failed to create thread\n");
+      return 1;
+    }
   }
 
+  //TODO: Write new client to the producer_consumer buffer
   while(1){
     memset(buffer, '\0', sizeof(buffer));
     read_msg(fd_serv, buffer, BUFFER_SIZE);
@@ -273,6 +278,9 @@ int main(int argc, char* argv[]) {
       if((fd_resp = open(resp_pipe, O_WRONLY)) < 0) {
         fprintf(stderr, "Failed to open receiver named pipe\n");
         return 1;
+      }
+      while (buffer_counter == MAX_SESSION_COUNT) {
+        pthread_cond_wait(&cond, &mutex);
       }
       request *new_request = (request *)malloc(sizeof(request));
       if (new_request == NULL) {
@@ -291,11 +299,22 @@ int main(int argc, char* argv[]) {
         }
         aux->next = new_request;
       }
+      buffer_counter++;
+      pthread_cond_signal(&cond);
     }
   }
- 
   //TODO: Close Server
+  for (int i = 0; i < MAX_SESSION_COUNT; i++) {
+    if (pthread_join(threads[i], NULL) != 0) {
+      fprintf(stderr, "Failed to join thread\n");
+      return 1;
+    }
+  }
+  
   close(fd_serv);
+
+  pthread_mutex_destroy(&mutex);
+  pthread_cond_destroy(&cond);
 
   ems_terminate();
 }
