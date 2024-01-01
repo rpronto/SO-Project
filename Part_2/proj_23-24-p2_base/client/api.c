@@ -84,10 +84,12 @@ int ems_quit(void) {
     fprintf(stderr, "Failed to close fd_req\n");
     return 1;
   }
+  unlink(session_ID.req_pipe_path);
   if (close(session_ID.fd_resp) < 0) {
     fprintf(stderr, "Failed to close fd_req\n");
     return 1;
   }
+  unlink(session_ID.resp_pipe_path);
   return 0;
 }
 

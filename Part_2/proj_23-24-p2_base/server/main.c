@@ -30,14 +30,10 @@ typedef struct threadArgs {
 void *threadFunction(void *args) {
   pthread_mutex_lock(&mutex);
   threadArgs *thread_args = (threadArgs *)args;
-  int session_id = thread_args->session_id;
+  int fd_req, fd_resp, quit = 0, session_id = thread_args->session_id;
   request **producer_consumer = thread_args->producer_consumer;
-  int fd_req, fd_resp;
-  char buffer[BUFFER_SIZE];  
+  char buffer[BUFFER_SIZE], op_code_str[2], id_str[2];  
   memset(buffer, '\0', sizeof(buffer));
-  char op_code_str[2];
-  char id_str[2];
-  int quit = 0;
   while(1) {
     while(buffer_counter == 0) {
       pthread_cond_wait(&cond, &mutex);
@@ -53,12 +49,8 @@ void *threadFunction(void *args) {
     send_msg(fd_resp, id_str);
     while (1) {
       int ret, fd_aux;
-      size_t num_seats = 0;
       unsigned int event_id = 0;
-      size_t xs[num_seats];
-      size_t ys[num_seats];
-      size_t rows;
-      size_t cols;
+      size_t rows, cols;
       const char *aux_file = "aux_file.txt"; //FIXME ***isto precisa de ser alterado -> cada thread tem de ter o seu ficheiro auxiliar***
       switch (buffer[0]) {
         case '2':
@@ -68,8 +60,7 @@ void *threadFunction(void *args) {
           close(fd_resp);
           break;
         case '3':
-          size_t num_rows = 0;
-          size_t num_col = 0;
+          size_t num_rows = 0, num_col = 0;
           char ret_str[2];
           sscanf(buffer, "%c %u %ld %ld", op_code_str, &event_id, &num_rows, &num_col);
           rows = num_rows;
@@ -79,11 +70,21 @@ void *threadFunction(void *args) {
           send_msg(fd_resp, ret_str);
           break;
         case '4':
-          int elements_already_read = 0;
-          int i = 0;
+          int elements_already_read = 0, i = 0;
           const char *ptr = buffer;
+          size_t num_seats = 0;
           sscanf(buffer, "%c %u %ld%n", op_code_str, &event_id, &num_seats, &elements_already_read);
-          ptr += elements_already_read;
+          ptr += elements_already_read + 1;
+          size_t *xs = (size_t*)malloc(sizeof(size_t) * num_seats);
+          if (xs == NULL) {
+            fprintf(stderr, "Failed to allocate memory for xs\n");
+            exit(1);
+          }
+          size_t *ys = (size_t*)malloc(sizeof(size_t) * num_seats);
+          if (ys == NULL) {
+            fprintf(stderr, "Failed to allocate memory for ys\n");
+            exit(1);
+          }
           while (sscanf(ptr, "%zu", &xs[i]) == 1) {
             ptr = strchr(ptr, ' ');
             if(ptr == NULL)
@@ -99,6 +100,8 @@ void *threadFunction(void *args) {
           ret = ems_reserve(event_id, num_seats, xs, ys);
           snprintf(ret_str, sizeof(ret), "%d", ret);
           send_msg(fd_resp, ret_str);
+          free(xs);
+          free(ys);
           break;
         case '5':
           size_t num_elements = 2 * rows * cols + 100;
@@ -141,7 +144,6 @@ void *threadFunction(void *args) {
             fprintf(stderr, "Failed open aux file\n");
             exit(1);
           }
-
           ret = ems_list_events(fd_aux);
           if(ret == 1) {
             send_msg(fd_resp, "1");
@@ -153,11 +155,9 @@ void *threadFunction(void *args) {
           char aux_buffer[BUFFER_SIZE];
           size_t num_events = 0;
           const char *aux_ptr = aux_buffer;
-
           lseek(fd_aux, 0, SEEK_SET);
           memset(aux_buffer, '\0', sizeof(aux_buffer));
           read_msg(fd_aux, aux_buffer, BUFFER_SIZE);
-        
           while(1) {
             if (sscanf(aux_ptr, "Event: %d", &event_id) == 1) {
               num_events++;
@@ -176,7 +176,6 @@ void *threadFunction(void *args) {
               break;
             aux_ptr++;
           }
-        
           char *list_events_msg = (char *)malloc(sizeof(ret) + sizeof(num_events) + (num_events * sizeof(unsigned int)) + 2);
           sprintf(list_events_msg, "%d %zu", ret, num_events);
           for (size_t j = 0; j < num_events; ++j) 
@@ -192,7 +191,7 @@ void *threadFunction(void *args) {
         quit = 0;
         break;
       }
-      //TODO: Read from pipe
+      // Read from pipe
       memset(buffer, '\0', sizeof(buffer));
       read_msg(fd_req, buffer, BUFFER_SIZE);
     }
@@ -225,20 +224,15 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  //TODO: Intialize server, create worker threads
+  // Intialize server, create worker threads
   pthread_mutex_init(&mutex, NULL);
   pthread_cond_init(&cond, NULL);
   char *pipeServer = argv[1];
   request *producer_consumer = NULL;
-  int fd_serv;
+  int fd_serv, fd_req, fd_resp;
   pthread_t threads[MAX_SESSION_COUNT];
   threadArgs args[MAX_SESSION_COUNT]; 
-  char buffer[BUFFER_SIZE];
-  char op_code_str[2];
-  char req_pipe[41];
-  char resp_pipe[41];
-  int fd_req;
-  int fd_resp;
+  char buffer[BUFFER_SIZE], op_code_str[2], req_pipe[41], resp_pipe[41];
   
   unlink(pipeServer);
 
@@ -261,7 +255,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  //TODO: Write new client to the producer_consumer buffer
+  // Write new client to the producer_consumer buffer
   while(1){
     memset(buffer, '\0', sizeof(buffer));
     read_msg(fd_serv, buffer, BUFFER_SIZE);
@@ -299,11 +293,13 @@ int main(int argc, char* argv[]) {
         }
         aux->next = new_request;
       }
+      pthread_mutex_lock(&mutex);
       buffer_counter++;
       pthread_cond_signal(&cond);
+      pthread_mutex_unlock(&mutex);
     }
   }
-  //TODO: Close Server
+  // Close Server
   for (int i = 0; i < MAX_SESSION_COUNT; i++) {
     if (pthread_join(threads[i], NULL) != 0) {
       fprintf(stderr, "Failed to join thread\n");
@@ -312,6 +308,7 @@ int main(int argc, char* argv[]) {
   }
   
   close(fd_serv);
+  unlink(pipeServer);
 
   pthread_mutex_destroy(&mutex);
   pthread_cond_destroy(&cond);
