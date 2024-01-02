@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "common/constants.h"
 #include "common/io.h"
@@ -28,13 +29,17 @@ typedef struct threadArgs {
 } threadArgs;
 
 void *threadFunction(void *args) {
-  pthread_mutex_lock(&mutex);
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  pthread_sigmask(SIG_BLOCK, &set, NULL);
   threadArgs *thread_args = (threadArgs *)args;
   int fd_req, fd_resp, quit = 0, session_id = thread_args->session_id;
   request **producer_consumer = thread_args->producer_consumer;
   char buffer[BUFFER_SIZE], op_code_str[2], id_str[2];  
   memset(buffer, '\0', sizeof(buffer));
   while(1) {
+    pthread_mutex_lock(&mutex);
     while(buffer_counter == 0) {
       pthread_cond_wait(&cond, &mutex);
     }
@@ -47,6 +52,7 @@ void *threadFunction(void *args) {
     pthread_cond_signal(&cond);
     sprintf(id_str, "%d", session_id);
     send_msg(fd_resp, id_str);
+    pthread_mutex_unlock(&mutex);
     while (1) {
       int ret, fd_aux;
       unsigned int event_id = 0;
@@ -54,36 +60,43 @@ void *threadFunction(void *args) {
       const char *aux_file = "aux_file.txt"; //FIXME ***isto precisa de ser alterado -> cada thread tem de ter o seu ficheiro auxiliar***
       switch (buffer[0]) {
         case '2':
+          pthread_mutex_lock(&mutex);
           quit = 1;
           memset(buffer, '\0', sizeof(buffer));
           close(fd_req);
           close(fd_resp);
+          pthread_mutex_unlock(&mutex);
           break;
         case '3':
           size_t num_rows = 0, num_col = 0;
           char ret_str[2];
+          pthread_mutex_lock(&mutex);
           sscanf(buffer, "%c %u %ld %ld", op_code_str, &event_id, &num_rows, &num_col);
           rows = num_rows;
           cols = num_col;
           ret = ems_create(event_id, num_rows, num_col);
           snprintf(ret_str, sizeof(ret), "%d", ret);
           send_msg(fd_resp, ret_str);
+          pthread_mutex_unlock(&mutex);
           break;
         case '4':
           int elements_already_read = 0, i = 0;
           const char *ptr = buffer;
           size_t num_seats = 0;
+          pthread_mutex_lock(&mutex);
           sscanf(buffer, "%c %u %ld%n", op_code_str, &event_id, &num_seats, &elements_already_read);
           ptr += elements_already_read + 1;
           size_t *xs = (size_t*)malloc(sizeof(size_t) * num_seats);
           if (xs == NULL) {
             fprintf(stderr, "Failed to allocate memory for xs\n");
-            exit(1);
+            pthread_mutex_unlock(&mutex);
+            pthread_exit(NULL);
           }
           size_t *ys = (size_t*)malloc(sizeof(size_t) * num_seats);
           if (ys == NULL) {
             fprintf(stderr, "Failed to allocate memory for ys\n");
-            exit(1);
+            pthread_mutex_unlock(&mutex);
+            pthread_exit(NULL);
           }
           while (sscanf(ptr, "%zu", &xs[i]) == 1) {
             ptr = strchr(ptr, ' ');
@@ -102,24 +115,28 @@ void *threadFunction(void *args) {
           send_msg(fd_resp, ret_str);
           free(xs);
           free(ys);
+          pthread_mutex_unlock(&mutex);
           break;
         case '5':
+          pthread_mutex_lock(&mutex);
           size_t num_elements = 2 * rows * cols + 100;
           char *msg = (char *)malloc(num_elements);
           if (msg == NULL) {
             fprintf(stderr, "Failed to allocate memory for msg\n");
-            exit(1);
+            pthread_mutex_unlock(&mutex);
+            pthread_exit(NULL);
           }
           const char *msg_ptr = msg;
           memset(msg, 0, num_elements);
           sscanf(buffer, "%c %u", op_code_str, &event_id);
           fd_aux = open(aux_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
           if (fd_aux < 0) {
-          fprintf(stderr, "Failed open aux file\n");
-          free(msg);
-          close(fd_aux);
-          unlink(aux_file);
-          exit(1);
+            fprintf(stderr, "Failed open aux file\n");
+            free(msg);
+            close(fd_aux);
+            unlink(aux_file);
+            pthread_mutex_unlock(&mutex);
+            pthread_exit(NULL);
           }
           ret = ems_show(fd_aux, event_id);
           if(ret == 1) {
@@ -127,6 +144,7 @@ void *threadFunction(void *args) {
             close(fd_aux);
             unlink(aux_file);
             free(msg);
+            pthread_mutex_unlock(&mutex);
             break;
           }
           sprintf(msg, "%d %zu %zu\n", ret, rows, cols);
@@ -137,18 +155,22 @@ void *threadFunction(void *args) {
           close(fd_aux);
           unlink(aux_file);
           free(msg);
+          pthread_mutex_unlock(&mutex);
           break;
         case '6':
+          pthread_mutex_lock(&mutex);
           fd_aux = open(aux_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
           if (fd_aux < 0) {
             fprintf(stderr, "Failed open aux file\n");
-            exit(1);
+            pthread_mutex_unlock(&mutex);
+            pthread_exit(NULL);
           }
           ret = ems_list_events(fd_aux);
           if(ret == 1) {
             send_msg(fd_resp, "1");
             close(fd_aux);
             unlink(aux_file);
+            pthread_mutex_unlock(&mutex);
             break;
           }
           unsigned int *ids = NULL;
@@ -167,7 +189,8 @@ void *threadFunction(void *args) {
                 close(fd_aux);
                 unlink(aux_file);
                 free(ids);
-                exit(1);
+                pthread_mutex_unlock(&mutex);
+                pthread_exit(NULL);
               }
               ids[num_events - 1] = event_id;
             }
@@ -185,6 +208,7 @@ void *threadFunction(void *args) {
           unlink(aux_file);
           free(ids);
           free(list_events_msg);
+          pthread_mutex_unlock(&mutex);
           break;
       }
       if (quit == 1){
@@ -192,11 +216,13 @@ void *threadFunction(void *args) {
         break;
       }
       // Read from pipe
+      pthread_mutex_lock(&mutex);
       memset(buffer, '\0', sizeof(buffer));
       read_msg(fd_req, buffer, BUFFER_SIZE);
+      pthread_mutex_unlock(&mutex);
     }
   }
-  pthread_mutex_unlock(&mutex);
+  pthread_exit(NULL);
 }
 
 
@@ -299,6 +325,7 @@ int main(int argc, char* argv[]) {
       pthread_mutex_unlock(&mutex);
     }
   }
+
   // Close Server
   for (int i = 0; i < MAX_SESSION_COUNT; i++) {
     if (pthread_join(threads[i], NULL) != 0) {
