@@ -15,7 +15,6 @@
 sessionID session_ID;
 
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
-  //TODO: create pipes and connect to the server
   char msg[MAX_PIPE_NAME_LENGHT * 2 + 2];
   char buffer[BUFFER_SIZE];
   char *endptr;
@@ -84,15 +83,16 @@ int ems_quit(void) {
     fprintf(stderr, "Failed to close fd_req\n");
     return 1;
   }
+  unlink(session_ID.req_pipe_path);
   if (close(session_ID.fd_resp) < 0) {
     fprintf(stderr, "Failed to close fd_req\n");
     return 1;
   }
+  unlink(session_ID.resp_pipe_path);
   return 0;
 }
 
 int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
-  //TODO: send create request to the server (through the request pipe) and wait for the response (through the response pipe)
   int op_code = 3, ret;
   char msg[BUFFER_SIZE];
   memset(msg, '\0', sizeof(msg));
@@ -110,13 +110,11 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
 
 
 int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys) {
-  //TODO: send reserve request to the server (through the request pipe) and wait for the response (through the response pipe)
   int op_code = 4, ret;
   char msg[BUFFER_SIZE + (num_seats * 2)];
   memset(msg, '\0', sizeof(msg));
   sprintf(msg, "%d %u %zu", op_code, event_id, num_seats);
   
-
   size_t i;
   for (i = 0; i < num_seats; ++i) {
       sprintf(msg + strlen(msg), " %zu %zu", xs[i], ys[i]);
@@ -132,9 +130,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   return 0;
 }
 
-
 int ems_show(int out_fd, unsigned int event_id) {
-  //TODO: send show request to the server (through the request pipe) and wait for the response (through the response pipe)
   int op_code = 5, ret;
   size_t num_rows = 0, num_cols = 0;
   char msg[BUFFER_SIZE];
@@ -157,7 +153,6 @@ int ems_show(int out_fd, unsigned int event_id) {
 
 
 int ems_list_events(int out_fd) {
-  //TODO: send list request to the server (through the request pipe) and wait for the response (through the response pipe)
   int op_code = 6, ret = 0, num_chars_read = 0;;
   size_t num_events = 0;
   char msg[BUFFER_SIZE];
