@@ -98,13 +98,17 @@ void *threadFunction(void *args) {
           ptr += elements_already_read + 1;
           size_t *xs = (size_t*)malloc(sizeof(size_t) * num_seats);
           if (xs == NULL) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed to allocate memory for xs\n");
+            pthread_mutex_unlock(&mutex);
             free(aux_file);
             pthread_exit(NULL);
           }
           size_t *ys = (size_t*)malloc(sizeof(size_t) * num_seats);
           if (ys == NULL) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed to allocate memory for ys\n");
+            pthread_mutex_unlock(&mutex);
             free(aux_file);
             pthread_exit(NULL);
           }
@@ -130,7 +134,9 @@ void *threadFunction(void *args) {
           size_t num_elements = 2 * rows * cols + 100;
           char *msg = (char *)malloc(num_elements);
           if (msg == NULL) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed to allocate memory for msg\n");
+            pthread_mutex_unlock(&mutex);
             free(aux_file);
             pthread_exit(NULL);
           }
@@ -139,7 +145,9 @@ void *threadFunction(void *args) {
           sscanf(buffer, "%c %u", op_code_str, &event_id);
           fd_aux = open(aux_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
           if (fd_aux < 0) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed open aux file\n");
+            pthread_mutex_unlock(&mutex);
             free(msg);
             close(fd_aux);
             unlink(aux_file);
@@ -166,7 +174,9 @@ void *threadFunction(void *args) {
         case '6':
           fd_aux = open(aux_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
           if (fd_aux < 0) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed open aux file\n");
+            pthread_mutex_unlock(&mutex);
             free(aux_file);
             pthread_exit(NULL);
           }
@@ -189,7 +199,9 @@ void *threadFunction(void *args) {
               num_events++;
               ids = realloc(ids, num_events * sizeof(unsigned int));
               if (ids == NULL) {
+                pthread_mutex_lock(&mutex);
                 fprintf(stderr, "Failed to realloc ids array\n");
+                pthread_mutex_unlock(&mutex);
                 close(fd_aux);
                 unlink(aux_file);
                 free(ids);
