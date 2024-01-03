@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include "common/constants.h"
 #include "common/io.h"
@@ -16,6 +17,7 @@
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 int buffer_counter = 0;
+int activate_signal = 0;
 
 typedef struct request {
   int fd_req, fd_resp;
@@ -27,14 +29,23 @@ typedef struct threadArgs {
   request **producer_consumer;
 } threadArgs;
 
+void sig_handler(int sig) {
+  if (sig == SIGUSR1)
+    activate_signal = 1;
+}
+
 void *threadFunction(void *args) {
-  pthread_mutex_lock(&mutex);
+  sigset_t set;
+  sigemptyset(&set);
+  sigaddset(&set, SIGUSR1);
+  pthread_sigmask(SIG_BLOCK, &set, NULL);
   threadArgs *thread_args = (threadArgs *)args;
   int fd_req, fd_resp, quit = 0, session_id = thread_args->session_id;
   request **producer_consumer = thread_args->producer_consumer;
   char buffer[BUFFER_SIZE], op_code_str[2], id_str[2];  
   memset(buffer, '\0', sizeof(buffer));
   while(1) {
+    pthread_mutex_lock(&mutex);
     while(buffer_counter == 0) {
       pthread_cond_wait(&cond, &mutex);
     }
@@ -45,19 +56,29 @@ void *threadFunction(void *args) {
     free(aux);
     buffer_counter--;
     pthread_cond_signal(&cond);
+    pthread_mutex_unlock(&mutex);
     sprintf(id_str, "%d", session_id);
     send_msg(fd_resp, id_str);
+    
+    char *aux_file_base = "aux_file_";
+    size_t aux_file_size = strlen(aux_file_base) + strlen(id_str) + 5; 
+    char *aux_file = malloc(aux_file_size * sizeof(char));  
+    memset(aux_file, '\0', aux_file_size * sizeof(char));
+    strcat(aux_file, aux_file_base);
+    strcat(aux_file, id_str);
+    strcat(aux_file, ".txt");
+    
     while (1) {
       int ret, fd_aux;
       unsigned int event_id = 0;
       size_t rows, cols;
-      const char *aux_file = "aux_file.txt"; //FIXME ***isto precisa de ser alterado -> cada thread tem de ter o seu ficheiro auxiliar***
       switch (buffer[0]) {
         case '2':
           quit = 1;
           memset(buffer, '\0', sizeof(buffer));
           close(fd_req);
           close(fd_resp);
+          free(aux_file);
           break;
         case '3':
           size_t num_rows = 0, num_col = 0;
@@ -77,13 +98,19 @@ void *threadFunction(void *args) {
           ptr += elements_already_read + 1;
           size_t *xs = (size_t*)malloc(sizeof(size_t) * num_seats);
           if (xs == NULL) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed to allocate memory for xs\n");
-            exit(1);
+            pthread_mutex_unlock(&mutex);
+            free(aux_file);
+            pthread_exit(NULL);
           }
           size_t *ys = (size_t*)malloc(sizeof(size_t) * num_seats);
           if (ys == NULL) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed to allocate memory for ys\n");
-            exit(1);
+            pthread_mutex_unlock(&mutex);
+            free(aux_file);
+            pthread_exit(NULL);
           }
           while (sscanf(ptr, "%zu", &xs[i]) == 1) {
             ptr = strchr(ptr, ' ');
@@ -107,19 +134,25 @@ void *threadFunction(void *args) {
           size_t num_elements = 2 * rows * cols + 100;
           char *msg = (char *)malloc(num_elements);
           if (msg == NULL) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed to allocate memory for msg\n");
-            exit(1);
+            pthread_mutex_unlock(&mutex);
+            free(aux_file);
+            pthread_exit(NULL);
           }
           const char *msg_ptr = msg;
           memset(msg, 0, num_elements);
           sscanf(buffer, "%c %u", op_code_str, &event_id);
           fd_aux = open(aux_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
           if (fd_aux < 0) {
-          fprintf(stderr, "Failed open aux file\n");
-          free(msg);
-          close(fd_aux);
-          unlink(aux_file);
-          exit(1);
+            pthread_mutex_lock(&mutex);
+            fprintf(stderr, "Failed open aux file\n");
+            pthread_mutex_unlock(&mutex);
+            free(msg);
+            close(fd_aux);
+            unlink(aux_file);
+            free(aux_file);
+            pthread_exit(NULL);
           }
           ret = ems_show(fd_aux, event_id);
           if(ret == 1) {
@@ -141,8 +174,11 @@ void *threadFunction(void *args) {
         case '6':
           fd_aux = open(aux_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
           if (fd_aux < 0) {
+            pthread_mutex_lock(&mutex);
             fprintf(stderr, "Failed open aux file\n");
-            exit(1);
+            pthread_mutex_unlock(&mutex);
+            free(aux_file);
+            pthread_exit(NULL);
           }
           ret = ems_list_events(fd_aux);
           if(ret == 1) {
@@ -163,11 +199,14 @@ void *threadFunction(void *args) {
               num_events++;
               ids = realloc(ids, num_events * sizeof(unsigned int));
               if (ids == NULL) {
+                pthread_mutex_lock(&mutex);
                 fprintf(stderr, "Failed to realloc ids array\n");
+                pthread_mutex_unlock(&mutex);
                 close(fd_aux);
                 unlink(aux_file);
                 free(ids);
-                exit(1);
+                free(aux_file);
+                pthread_exit(NULL);
               }
               ids[num_events - 1] = event_id;
             }
@@ -196,7 +235,7 @@ void *threadFunction(void *args) {
       read_msg(fd_req, buffer, BUFFER_SIZE);
     }
   }
-  pthread_mutex_unlock(&mutex);
+  pthread_exit(NULL);
 }
 
 
@@ -256,10 +295,13 @@ int main(int argc, char* argv[]) {
   }
 
   // Write new client to the producer_consumer buffer
-  while(1){
+  while(1) {
+    if (signal(SIGUSR1, sig_handler) == SIG_ERR) {
+      return 1;
+    }
     memset(buffer, '\0', sizeof(buffer));
     read_msg(fd_serv, buffer, BUFFER_SIZE);
-    if (buffer[0] == '1') {
+    if ((buffer[0] == '1') && (activate_signal == 0)) {
       memset(op_code_str, '\0', sizeof(op_code_str));
       memset(req_pipe, '\0', sizeof(req_pipe));
       memset(resp_pipe, '\0', sizeof(resp_pipe));
@@ -268,7 +310,6 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "Failed to open sender named pipe\n");
         return 1;
       }
-
       if((fd_resp = open(resp_pipe, O_WRONLY)) < 0) {
         fprintf(stderr, "Failed to open receiver named pipe\n");
         return 1;
@@ -298,7 +339,53 @@ int main(int argc, char* argv[]) {
       pthread_cond_signal(&cond);
       pthread_mutex_unlock(&mutex);
     }
+    if (activate_signal != 0) {
+      char *aux_serv_file = "aux_serv_file.txt";
+      int fd_serv_aux = open(aux_serv_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
+      if (fd_serv_aux < 0) {
+        fprintf(stderr, "Failed open aux server file\n");
+        return 1;
+      }
+      int ret = ems_list_events(fd_serv_aux);
+      if(ret == 1) {
+        close(fd_serv_aux);
+        unlink(aux_serv_file);
+        return 1;
+      }
+      unsigned int *ids = NULL, event_id;
+      char aux_buffer[BUFFER_SIZE];
+      size_t num_events = 0;
+      const char *aux_ptr = aux_buffer;
+      lseek(fd_serv_aux, 0, SEEK_SET);
+      memset(aux_buffer, '\0', sizeof(aux_buffer));
+      read_msg(fd_serv_aux, aux_buffer, BUFFER_SIZE);
+      close(fd_serv_aux);
+      unlink(aux_serv_file);
+      while(1) {
+        if (sscanf(aux_ptr, "Event: %d", &event_id) == 1) {
+          num_events++;
+          ids = realloc(ids, num_events * sizeof(unsigned int));
+          if (ids == NULL) {
+            fprintf(stderr, "Failed to realloc ids array\n");
+            free(ids);
+            return 1;
+          }
+          ids[num_events - 1] = event_id;
+        }
+        aux_ptr = strchr(aux_ptr, '\n');
+        if (aux_ptr == NULL)
+          break;
+        aux_ptr++;
+      } 
+      for (size_t i = 0; i < num_events; i++) {
+        printf("Event: %d\n", ids[i]);
+        ems_show(STDOUT_FILENO, ids[i]);
+      }
+      free(ids);
+      activate_signal = 0;
+    }
   }
+
   // Close Server
   for (int i = 0; i < MAX_SESSION_COUNT; i++) {
     if (pthread_join(threads[i], NULL) != 0) {
