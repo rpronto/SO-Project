@@ -328,8 +328,48 @@ int main(int argc, char* argv[]) {
       pthread_mutex_unlock(&mutex);
     }
     if (activate_signal != 0) {
-      // ems_list_events(STDOUT_FILENO); falta terminar esta parte
-      
+      char *aux_serv_file = "aux_serv_file.txt";
+      int fd_serv_aux = open(aux_serv_file, O_RDWR | O_CREAT | O_TRUNC, 0644);
+      if (fd_serv_aux < 0) {
+        fprintf(stderr, "Failed open aux server file\n");
+        return 1;
+      }
+      int ret = ems_list_events(fd_serv_aux);
+      if(ret == 1) {
+        close(fd_serv_aux);
+        unlink(aux_serv_file);
+        return 1;
+      }
+      unsigned int *ids = NULL, event_id;
+      char aux_buffer[BUFFER_SIZE];
+      size_t num_events = 0;
+      const char *aux_ptr = aux_buffer;
+      lseek(fd_serv_aux, 0, SEEK_SET);
+      memset(aux_buffer, '\0', sizeof(aux_buffer));
+      read_msg(fd_serv_aux, aux_buffer, BUFFER_SIZE);
+      close(fd_serv_aux);
+      unlink(aux_serv_file);
+      while(1) {
+        if (sscanf(aux_ptr, "Event: %d", &event_id) == 1) {
+          num_events++;
+          ids = realloc(ids, num_events * sizeof(unsigned int));
+          if (ids == NULL) {
+            fprintf(stderr, "Failed to realloc ids array\n");
+            free(ids);
+            return 1;
+          }
+          ids[num_events - 1] = event_id;
+        }
+        aux_ptr = strchr(aux_ptr, '\n');
+        if (aux_ptr == NULL)
+          break;
+        aux_ptr++;
+      } 
+      for (size_t i = 0; i < num_events; i++) {
+        printf("Event: %d\n", ids[i]);
+        ems_show(STDOUT_FILENO, ids[i]);
+      }
+      free(ids);
       activate_signal = 0;
     }
   }
